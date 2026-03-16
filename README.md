@@ -1,36 +1,92 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Hours Platform (Next.js + Supabase + Stripe)
 
-## Getting Started
+Role-based platform for tracking project working hours:
 
-First, run the development server:
+- **Admin**: invites users, creates projects, assigns each project to one customer, assigns workers to projects.
+- **Customer**: sees own projects, assigned vs used hours, detailed time usage, buys more hours with Stripe.
+- **Worker**: sees assigned projects, starts/stops timer, and adds manual time entries.
+
+## Tech stack
+
+- Next.js (App Router)
+- Supabase (`@supabase/ssr` + Postgres + RLS)
+- Stripe Checkout + webhook fulfillment
+- Tailwind CSS
+
+## 1) Setup
+
+```bash
+npm install
+cp .env.example .env.local
+```
+
+Fill `.env.local`:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+STRIPE_PRICE_PER_HOUR_CENTS=5000
+STRIPE_CURRENCY=usd
+```
+
+## 2) Supabase database + RLS
+
+Run SQL from:
+
+```bash
+supabase/schema.sql
+```
+
+This creates:
+
+- `profiles` with role (`admin`, `customer`, `worker`)
+- `projects` (one `customer_id` per project)
+- `project_workers` (many workers per project)
+- `time_entries` (timer/manual)
+- `hour_purchases` (Stripe-purchased hours ledger)
+- `processed_stripe_events` and `apply_hour_purchase` for idempotent fulfillment
+
+## 3) Stripe webhook
+
+Create webhook endpoint in Stripe:
+
+```text
+http://localhost:3000/api/stripe/webhook
+```
+
+Subscribe to:
+
+- `checkout.session.completed`
+
+Use the signing secret as `STRIPE_WEBHOOK_SECRET`.
+
+## 4) Run
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 5) Main routes
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `/login` (magic-link only), `/signup` (invite notice)
+- `/admin`
+- `/customer`
+- `/worker`
+- `/api/stripe/webhook`
 
-## Learn More
+Route access is enforced via `src/proxy.ts` + role checks and Supabase RLS.
 
-To learn more about Next.js, take a look at the following resources:
+## Invite-only authentication
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Login is passwordless magic-link only.
+- Only emails pre-invited by admin can request a magic link.
+- Invitations are stored in `public.invitations`.
+- New users are accepted only if an invitation exists; role and optional name are applied from invitation.
