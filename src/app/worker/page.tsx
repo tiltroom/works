@@ -2,6 +2,7 @@ import { createManualTimeEntryAction, deleteTimeEntryAction, startTimerAction, s
 import { LogoutButton } from "@/components/logout-button";
 import Link from "next/link";
 import { TimerCard } from "@/components/worker/timer-card";
+import { StopTimerButton } from "@/components/worker/stop-timer-button";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getLocale, localeTag, t } from "@/lib/i18n";
@@ -178,15 +179,17 @@ export default async function WorkerPage({
                     noDescriptionLabel={t(locale, "No description provided", "Nessuna descrizione fornita")}
                   />
                 </div>
-                <form action={stopTimerAction} className="w-full md:w-auto shrink-0">
-                  <input type="hidden" name="timeEntryId" value={running.id} />
-                  <button className="w-full md:w-auto rounded-xl bg-red-500/10 text-red-500 px-6 py-4 font-bold transition-all hover:bg-red-500 hover:text-white border border-red-500/20 shadow-[0_0_20px_rgba(239,68,68,0.15)] hover:shadow-[0_0_30px_rgba(239,68,68,0.3)] flex items-center justify-center gap-2">
-                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
-                    </svg>
-                    {t(locale, "Stop Timer", "Ferma timer")}
-                  </button>
-                </form>
+                <div className="w-full md:w-auto shrink-0">
+                  <StopTimerButton
+                    timeEntryId={running.id}
+                    stopTimerAction={stopTimerAction}
+                    labels={{
+                      stopTimer: t(locale, "Stop Timer", "Ferma timer"),
+                      errorTitle: t(locale, "Error Stopping Timer", "Errore durante l'arresto del timer"),
+                      close: t(locale, "Close", "Chiudi"),
+                    }}
+                  />
+                </div>
               </div>
             </section>
           ) : (
