@@ -11,6 +11,18 @@ export const dynamic = "force-dynamic";
 
 type AdminTab = "overview" | "projects" | "users";
 
+type AdminCustomer = {
+  id: string;
+  full_name: string | null;
+  role: "customer";
+  custom_hourly_rate_cents: number | null;
+};
+
+type CustomerRateRow = {
+  id: string;
+  custom_hourly_rate_cents: number | null;
+};
+
 function tabStyles(isActive: boolean) {
   return isActive
     ? "bg-brand-600/20 text-brand-300 border-brand-500/40"
@@ -32,8 +44,9 @@ export default async function AdminPage({
   const deleteProjectIdParam = params.deleteProjectId;
   const activeTab: AdminTab = tabParam === "projects" || tabParam === "users" ? tabParam : "overview";
 
-  const [{ data: customers }, { data: workers }, { data: admins }, { data: projects }, { data: invitations }] = await Promise.all([
-    supabase.from("profiles").select("id,full_name,role,custom_hourly_rate_cents").eq("role", "customer"),
+  const [{ data: customerProfiles }, { data: customerRates, error: customerRatesError }, { data: workers }, { data: admins }, { data: projects }, { data: invitations }] = await Promise.all([
+    supabase.from("profiles").select("id,full_name,role").eq("role", "customer"),
+    supabase.from("profiles").select("id,custom_hourly_rate_cents").eq("role", "customer"),
     supabase.from("profiles").select("id,full_name,role").eq("role", "worker"),
     supabase.from("profiles").select("id,full_name,role").eq("role", "admin"),
     supabase
@@ -44,6 +57,24 @@ export default async function AdminPage({
       .select("id,email,role,full_name,created_at,accepted_at")
       .order("created_at", { ascending: false }),
   ]);
+
+  const missingCustomerRateColumn = customerRatesError?.code === "PGRST204"
+    || customerRatesError?.code === "42703"
+    || customerRatesError?.message.includes("custom_hourly_rate_cents")
+    || false;
+
+  if (customerRatesError && !missingCustomerRateColumn) {
+    throw new Error(customerRatesError.message);
+  }
+
+  const customerRatesById = new Map(
+    ((customerRates ?? []) as CustomerRateRow[]).map((customerRate) => [customerRate.id, customerRate.custom_hourly_rate_cents]),
+  );
+
+  const customers: AdminCustomer[] = ((customerProfiles ?? []) as Array<{ id: string; full_name: string | null; role: "customer" }>).map((customer) => ({
+    ...customer,
+    custom_hourly_rate_cents: customerRatesById.get(customer.id) ?? null,
+  }));
 
   const pendingInvitations = (invitations ?? []).filter((invitation) => !invitation.accepted_at);
   const totalAssignedHours = (projects ?? []).reduce((sum, project) => sum + Number(project.assigned_hours ?? 0), 0);
@@ -446,7 +477,7 @@ export default async function AdminPage({
                   <thead className="text-xs text-zinc-400 uppercase bg-zinc-900/50 border-b border-zinc-800">
                     <tr>
                        <th className="px-4 py-3 font-medium">{t(locale, "Customer", "Cliente")}</th>
-                       <th className="px-4 py-3 font-medium">{t(locale, "Custom Rate (USD/hour)", "Tariffa personalizzata (USD/ora)")}</th>
+                       <th className="px-4 py-3 font-medium">{t(locale, "Custom Rate (EUR/hour)", "Tariffa personalizzata (EUR/ora)")}</th>
                        <th className="px-4 py-3 font-medium text-right">{t(locale, "Action", "Azione")}</th>
                     </tr>
                   </thead>
@@ -476,7 +507,7 @@ export default async function AdminPage({
                               >
                                 <input type="hidden" name="customerId" value={customer.id} />
                                 <div className="relative">
-                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 text-sm">$</span>
+                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 text-sm">€</span>
                                   <input
                                     name="customHourlyRate"
                                     type="number"
