@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { getLocale } from "@/lib/i18n";
+import { LanguageSwitcher } from "@/components/language-switcher";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -12,23 +14,35 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "Hours Platform",
-  description: "Track project working hours with Supabase and Stripe",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getLocale();
 
-export default function RootLayout({
+  return {
+    title: locale === "it" ? "Hours Platform" : "Hours Platform",
+    description:
+      locale === "it"
+        ? "Monitora le ore di lavoro dei progetti con Supabase e Stripe"
+        : "Track project working hours with Supabase and Stripe",
+  };
+}
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getLocale();
+
   return (
-    <html lang="en">
+    <html lang={locale}>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
         <div className="min-h-screen bg-background text-foreground flex flex-col items-center">
           <div className="w-full max-w-7xl mx-auto flex-grow flex flex-col p-4 sm:p-6 md:p-8">
+            <div className="mb-4 flex justify-end">
+              <LanguageSwitcher locale={locale} />
+            </div>
             {children}
           </div>
         </div>
