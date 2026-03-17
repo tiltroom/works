@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { env } from "@/lib/env";
 import { getDashboardPathFromUnknownRole } from "@/lib/role-routing";
 
 export async function GET(request: Request) {
@@ -16,7 +17,7 @@ export async function GET(request: Request) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.redirect(new URL("/login", requestUrl.origin));
+    return NextResponse.redirect(new URL("/login", env.appUrl));
   }
 
   const { data: profile } = await supabase
@@ -26,6 +27,6 @@ export async function GET(request: Request) {
     .single();
 
   return NextResponse.redirect(
-    new URL(getDashboardPathFromUnknownRole(profile?.role), requestUrl.origin),
+    new URL(getDashboardPathFromUnknownRole(profile?.role), env.appUrl),
   );
 }
