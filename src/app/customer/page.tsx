@@ -222,8 +222,10 @@ export default async function CustomerPage() {
                       title={t(locale, "Recent Activity", "Attività recenti")}
                       showLabel={t(locale, "Show", "Mostra")}
                       hideLabel={t(locale, "Hide", "Nascondi")}
+                      exportUrl={`/customer/export/${project.id}`}
+                      exportLabel={t(locale, "Export XLS", "Esporta XLS")}
                     >
-                      <div className="overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/20">
+                        <div className="overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/20">
                         <div className="overflow-x-auto">
                           <table className="w-full text-sm text-left">
                             <thead className="text-xs text-zinc-400 uppercase bg-zinc-900/50 border-b border-zinc-800">
@@ -267,9 +269,9 @@ export default async function CustomerPage() {
                                 );
                               })}
                             </tbody>
-                          </table>
-                        </div>
-                      </div>
+                             </table>
+                           </div>
+                         </div>
                     </RecentActivityToggle>
                   )}
                 </div>
