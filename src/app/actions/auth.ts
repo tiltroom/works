@@ -4,12 +4,14 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { env } from "@/lib/env";
+import { getLocale, t } from "@/lib/i18n";
 
 export async function sendMagicLinkAction(formData: FormData) {
+  const locale = await getLocale();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
 
   if (!email) {
-    redirect("/login?error=Email%20is%20required");
+    redirect(`/login?error=${encodeURIComponent(t(locale, "Email is required", "L'email è obbligatoria"))}`);
   }
 
   const admin = createAdminClient();
@@ -24,7 +26,7 @@ export async function sendMagicLinkAction(formData: FormData) {
   }
 
   if (!invitation) {
-    redirect("/login?error=This%20email%20is%20not%20invited");
+    redirect(`/login?error=${encodeURIComponent(t(locale, "This email is not invited", "Questa email non è stata invitata"))}`);
   }
 
   const supabase = await createClient();

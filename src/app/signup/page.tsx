@@ -1,6 +1,9 @@
 import Link from "next/link";
+import { getLocale, t } from "@/lib/i18n";
 
-export default function SignupPage() {
+export default async function SignupPage() {
+  const locale = await getLocale();
+
   return (
     <main className="flex min-h-[80vh] flex-col items-center justify-center p-6 text-center">
       <div className="glass-card max-w-md w-full rounded-2xl p-10 border border-white/10 shadow-2xl relative overflow-hidden">
@@ -12,11 +15,14 @@ export default function SignupPage() {
           </svg>
         </div>
 
-        <h1 className="text-3xl font-bold tracking-tight mb-4 text-white">Invitation Required</h1>
+        <h1 className="text-3xl font-bold tracking-tight mb-4 text-white">{t(locale, "Invitation Required", "Invito richiesto")}</h1>
         
         <p className="text-base text-zinc-400 leading-relaxed mb-8">
-          This platform is currently invite-only to ensure quality and security. 
-          Please contact your administrator to add your email address.
+          {t(
+            locale,
+            "This platform is currently invite-only to ensure quality and security. Please contact your administrator to add your email address.",
+            "Questa piattaforma è attualmente solo su invito per garantire qualità e sicurezza. Contatta il tuo amministratore per aggiungere il tuo indirizzo email.",
+          )}
         </p>
 
         <div className="space-y-4">
@@ -24,13 +30,13 @@ export default function SignupPage() {
             href="/login"
             className="block w-full rounded-lg bg-zinc-800 px-4 py-3 font-medium text-white transition-all hover:bg-zinc-700 hover:text-white border border-zinc-700 hover:border-zinc-600"
           >
-            Go to Magic-Link Sign In
+            {t(locale, "Go to Magic-Link Sign In", "Vai all'accesso con link magico")}
           </Link>
           <Link
             href="/"
             className="block w-full text-sm font-medium text-zinc-500 hover:text-zinc-300 transition-colors"
           >
-            Return to Home
+            {t(locale, "Return to Home", "Torna alla home")}
           </Link>
         </div>
       </div>
