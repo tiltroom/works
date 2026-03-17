@@ -5,15 +5,17 @@ import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import { getStripeClient } from "@/lib/stripe";
+import { getLocale, t } from "@/lib/i18n";
 
 export async function createCheckoutForHoursAction(formData: FormData) {
+  const locale = await getLocale();
   const profile = await requireRole(["customer"]);
 
   const projectId = String(formData.get("projectId") ?? "").trim();
   const hoursToBuy = Number(formData.get("hoursToBuy") ?? "0");
 
   if (!projectId || Number.isNaN(hoursToBuy) || hoursToBuy <= 0) {
-    throw new Error("Invalid checkout payload");
+    throw new Error(t(locale, "Invalid checkout payload", "Payload checkout non valido"));
   }
 
   const supabase = await createClient();
@@ -24,11 +26,11 @@ export async function createCheckoutForHoursAction(formData: FormData) {
     .single();
 
   if (projectError || !project) {
-    throw new Error(projectError?.message ?? "Project not found");
+    throw new Error(projectError?.message ?? t(locale, "Project not found", "Progetto non trovato"));
   }
 
   if (project.customer_id !== profile.id) {
-    throw new Error("Not authorized for this project");
+    throw new Error(t(locale, "Not authorized for this project", "Non autorizzato per questo progetto"));
   }
 
   const { data: customerProfile, error: customerProfileError } = await supabase
@@ -38,14 +40,14 @@ export async function createCheckoutForHoursAction(formData: FormData) {
     .single();
 
   if (customerProfileError || !customerProfile) {
-    throw new Error(customerProfileError?.message ?? "Customer profile not found");
+    throw new Error(customerProfileError?.message ?? t(locale, "Customer profile not found", "Profilo cliente non trovato"));
   }
 
   const stripe = getStripeClient();
   const unitAmount = customerProfile.custom_hourly_rate_cents ?? env.stripePricePerHourCents;
 
   if (!Number.isInteger(unitAmount) || unitAmount <= 0) {
-    throw new Error("Invalid hourly rate configuration");
+    throw new Error(t(locale, "Invalid hourly rate configuration", "Configurazione tariffa oraria non valida"));
   }
 
   const totalCents = unitAmount * hoursToBuy;
@@ -59,7 +61,7 @@ export async function createCheckoutForHoursAction(formData: FormData) {
           currency: env.stripeCurrency,
           product_data: {
             name: `${hoursToBuy} additional project hour${hoursToBuy > 1 ? "s" : ""}`,
-            description: `Top-up for project ${project.name}`,
+            description: t(locale, `Top-up for project ${project.name}`, `Ricarica per il progetto ${project.name}`),
           },
           unit_amount: totalCents,
         },
@@ -78,7 +80,7 @@ export async function createCheckoutForHoursAction(formData: FormData) {
   });
 
   if (!session.url) {
-    throw new Error("Missing checkout url");
+    throw new Error(t(locale, "Missing checkout url", "URL checkout mancante"));
   }
 
   redirect(session.url);

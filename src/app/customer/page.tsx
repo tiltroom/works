@@ -3,6 +3,7 @@ import { LogoutButton } from "@/components/logout-button";
 import { hoursToDisplay, millisecondsToHours } from "@/lib/time";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getLocale, localeTag, t } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,8 @@ function totalUsedHours(entries: ProjectTimeRow[]) {
 }
 
 export default async function CustomerPage() {
+  const locale = await getLocale();
+  const tag = localeTag(locale);
   const profile = await requireRole(["customer"]);
   const supabase = await createClient();
 
@@ -79,9 +82,9 @@ export default async function CustomerPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
             </span>
-            Customer Portal
+            {t(locale, "Customer Portal", "Portale cliente")}
           </h1>
-          <p className="text-zinc-400 mt-1">Monitor project progress, track hours used, and manage billing.</p>
+          <p className="text-zinc-400 mt-1">{t(locale, "Monitor project progress, track hours used, and manage billing.", "Monitora l'avanzamento dei progetti, le ore utilizzate e la fatturazione.")}</p>
         </div>
         <LogoutButton />
       </header>
@@ -91,13 +94,13 @@ export default async function CustomerPage() {
           <svg className="w-5 h-5 text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
           </svg>
-          Projects & Hours Usage
+          {t(locale, "Projects & Hours Usage", "Progetti e utilizzo ore")}
         </h2>
         
         <div className="grid gap-6">
           {customerProjects.length === 0 ? (
             <div className="glass-card rounded-2xl p-8 border border-zinc-800 text-center text-zinc-400">
-              No projects have been assigned to you yet.
+              {t(locale, "No projects have been assigned to you yet.", "Non ti sono ancora stati assegnati progetti.")}
             </div>
           ) : (
             customerProjects.map((project) => {
@@ -120,15 +123,15 @@ export default async function CustomerPage() {
                       
                       <div className="grid grid-cols-3 gap-4 mb-4">
                         <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800/50">
-                          <p className="text-sm text-zinc-400 mb-1">Assigned</p>
+                          <p className="text-sm text-zinc-400 mb-1">{t(locale, "Assigned", "Assegnate")}</p>
                           <p className="text-xl font-semibold text-white">{hoursToDisplay(totalAssigned)}</p>
                         </div>
                         <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800/50">
-                          <p className="text-sm text-zinc-400 mb-1">Used</p>
+                          <p className="text-sm text-zinc-400 mb-1">{t(locale, "Used", "Usate")}</p>
                           <p className="text-xl font-semibold text-white">{hoursToDisplay(used)}</p>
                         </div>
                         <div className={`bg-zinc-900/50 rounded-xl p-4 border ${isOutOfHours ? 'border-red-500/30' : isLowHours ? 'border-amber-500/30' : 'border-zinc-800/50'}`}>
-                          <p className="text-sm text-zinc-400 mb-1">Remaining</p>
+                          <p className="text-sm text-zinc-400 mb-1">{t(locale, "Remaining", "Rimanenti")}</p>
                           <p className={`text-xl font-semibold ${isOutOfHours ? 'text-red-400' : isLowHours ? 'text-amber-400' : 'text-brand-400'}`}>
                             {hoursToDisplay(remaining)}
                           </p>
@@ -137,9 +140,9 @@ export default async function CustomerPage() {
 
                       <div className="space-y-2">
                         <div className="flex justify-between text-xs text-zinc-400">
-                          <span>Usage: {usagePercent.toFixed(1)}%</span>
-                          {isLowHours && <span className="text-amber-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span> Running low</span>}
-                          {isOutOfHours && <span className="text-red-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse"></span> Out of hours</span>}
+                          <span>{t(locale, "Usage", "Utilizzo")}: {usagePercent.toFixed(1)}%</span>
+                          {isLowHours && <span className="text-amber-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span> {t(locale, "Running low", "In esaurimento")}</span>}
+                          {isOutOfHours && <span className="text-red-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse"></span> {t(locale, "Out of hours", "Ore esaurite")}</span>}
                         </div>
                         <div className="h-2 w-full bg-zinc-800 rounded-full overflow-hidden">
                           <div 
@@ -155,7 +158,7 @@ export default async function CustomerPage() {
                         <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                         </svg>
-                        Add Capacity
+                        {t(locale, "Add Capacity", "Aggiungi capacità")}
                       </h4>
                       <form action={createCheckoutForHoursAction} className="flex flex-col gap-3">
                         <input type="hidden" name="projectId" value={project.id} />
@@ -168,10 +171,10 @@ export default async function CustomerPage() {
                             defaultValue="10"
                             className="w-full rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all pr-12"
                           />
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 text-sm">hrs</span>
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 text-sm">{t(locale, "hrs", "ore")}</span>
                         </div>
                         <button className="w-full rounded-lg bg-white text-zinc-900 px-4 py-2 font-medium transition-all hover:bg-zinc-200 shadow-sm border border-transparent">
-                          Buy Hours via Stripe
+                          {t(locale, "Buy Hours via Stripe", "Acquista ore con Stripe")}
                         </button>
                       </form>
                     </div>
@@ -179,16 +182,16 @@ export default async function CustomerPage() {
 
                   {projectEntries.length > 0 && (
                     <div className="mt-6 border-t border-zinc-800/60 pt-6">
-                      <h4 className="text-sm font-medium text-zinc-400 mb-4 uppercase tracking-wider">Recent Activity</h4>
+                      <h4 className="text-sm font-medium text-zinc-400 mb-4 uppercase tracking-wider">{t(locale, "Recent Activity", "Attività recenti")}</h4>
                       <div className="overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/20">
                         <div className="overflow-x-auto">
                           <table className="w-full text-sm text-left">
                             <thead className="text-xs text-zinc-400 uppercase bg-zinc-900/50 border-b border-zinc-800">
                               <tr>
-                                <th className="px-4 py-3 font-medium">Worker</th>
-                                <th className="px-4 py-3 font-medium">Started</th>
-                                <th className="px-4 py-3 font-medium">Ended</th>
-                                <th className="px-4 py-3 font-medium">Description</th>
+                                <th className="px-4 py-3 font-medium">{t(locale, "Worker", "Operatore")}</th>
+                                <th className="px-4 py-3 font-medium">{t(locale, "Started", "Iniziato")}</th>
+                                <th className="px-4 py-3 font-medium">{t(locale, "Ended", "Terminato")}</th>
+                                <th className="px-4 py-3 font-medium">{t(locale, "Description", "Descrizione")}</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-zinc-800/60">
@@ -202,18 +205,18 @@ export default async function CustomerPage() {
                                       {entry.profiles?.full_name || entry.worker_id}
                                     </div>
                                   </td>
-                                  <td className="px-4 py-3 text-zinc-400">{new Date(entry.started_at).toLocaleString()}</td>
+                                  <td className="px-4 py-3 text-zinc-400">{new Date(entry.started_at).toLocaleString(tag)}</td>
                                   <td className="px-4 py-3">
                                     {entry.ended_at ? (
-                                      <span className="text-zinc-400">{new Date(entry.ended_at).toLocaleString()}</span>
+                                      <span className="text-zinc-400">{new Date(entry.ended_at).toLocaleString(tag)}</span>
                                     ) : (
                                       <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-brand-500/10 text-brand-400 border border-brand-500/20">
                                         <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse"></span>
-                                        Running
+                                        {t(locale, "Running", "In corso")}
                                       </span>
                                     )}
                                   </td>
-                                  <td className="px-4 py-3 text-zinc-400">{entry.description || <span className="text-zinc-600 italic">No description</span>}</td>
+                                  <td className="px-4 py-3 text-zinc-400">{entry.description || <span className="text-zinc-600 italic">{t(locale, "No description", "Nessuna descrizione")}</span>}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -234,7 +237,7 @@ export default async function CustomerPage() {
           <svg className="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
           </svg>
-          Purchase History
+          {t(locale, "Purchase History", "Storico acquisti")}
         </h2>
         
         <div className="glass-card rounded-2xl p-6 border border-zinc-800">
@@ -243,21 +246,21 @@ export default async function CustomerPage() {
               <table className="w-full text-sm text-left">
                 <thead className="text-xs text-zinc-400 uppercase bg-zinc-900/50 border-b border-zinc-800">
                   <tr>
-                    <th className="px-4 py-3 font-medium">Project</th>
-                    <th className="px-4 py-3 font-medium">Hours Added</th>
-                    <th className="px-4 py-3 font-medium">Amount Paid</th>
-                    <th className="px-4 py-3 font-medium">Date</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-800/60">
-                  {billingRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="px-4 py-8 text-center text-zinc-500">No purchases found.</td>
+                      <th className="px-4 py-3 font-medium">{t(locale, "Project", "Progetto")}</th>
+                      <th className="px-4 py-3 font-medium">{t(locale, "Hours Added", "Ore aggiunte")}</th>
+                      <th className="px-4 py-3 font-medium">{t(locale, "Amount Paid", "Importo pagato")}</th>
+                      <th className="px-4 py-3 font-medium">{t(locale, "Date", "Data")}</th>
                     </tr>
-                  ) : (
-                    billingRows.map((purchase) => {
-                      const projectName = customerProjects.find((project) => project.id === purchase.project_id)?.name ?? "Unknown";
-                      return (
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800/60">
+                    {billingRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-8 text-center text-zinc-500">{t(locale, "No purchases found.", "Nessun acquisto trovato.")}</td>
+                      </tr>
+                    ) : (
+                      billingRows.map((purchase) => {
+                        const projectName = customerProjects.find((project) => project.id === purchase.project_id)?.name ?? t(locale, "Unknown", "Sconosciuto");
+                        return (
                         <tr key={purchase.id} className="hover:bg-zinc-800/30 transition-colors">
                           <td className="px-4 py-3 font-medium text-zinc-200">{projectName}</td>
                           <td className="px-4 py-3">
@@ -268,7 +271,7 @@ export default async function CustomerPage() {
                           <td className="px-4 py-3 text-zinc-300 font-mono">
                             {(purchase.amount_cents / 100).toFixed(2)} <span className="text-zinc-500 ml-1">{purchase.currency.toUpperCase()}</span>
                           </td>
-                          <td className="px-4 py-3 text-zinc-400">{new Date(purchase.created_at).toLocaleString()}</td>
+                          <td className="px-4 py-3 text-zinc-400">{new Date(purchase.created_at).toLocaleString(tag)}</td>
                         </tr>
                       );
                     })
