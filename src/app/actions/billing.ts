@@ -39,12 +39,17 @@ export async function createCheckoutForHoursAction(formData: FormData) {
     .eq("id", profile.id)
     .single();
 
-  if (customerProfileError || !customerProfile) {
+  const missingCustomerRateColumn = customerProfileError?.code === "PGRST204"
+    || customerProfileError?.code === "42703"
+    || customerProfileError?.message.includes("custom_hourly_rate_cents")
+    || false;
+
+  if ((customerProfileError && !missingCustomerRateColumn) || (!customerProfile && !missingCustomerRateColumn)) {
     throw new Error(customerProfileError?.message ?? t(locale, "Customer profile not found", "Profilo cliente non trovato"));
   }
 
   const stripe = getStripeClient();
-  const unitAmount = customerProfile.custom_hourly_rate_cents ?? env.stripePricePerHourCents;
+  const unitAmount = customerProfile?.custom_hourly_rate_cents ?? env.stripePricePerHourCents;
 
   if (!Number.isInteger(unitAmount) || unitAmount <= 0) {
     throw new Error(t(locale, "Invalid hourly rate configuration", "Configurazione tariffa oraria non valida"));
