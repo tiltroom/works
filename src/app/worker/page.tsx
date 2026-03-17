@@ -1,5 +1,6 @@
-import { createManualTimeEntryAction, startTimerAction, stopTimerAction } from "@/app/actions/time-entries";
+import { createManualTimeEntryAction, deleteTimeEntryAction, startTimerAction, stopTimerAction, updateTimeEntryAction } from "@/app/actions/time-entries";
 import { LogoutButton } from "@/components/logout-button";
+import Link from "next/link";
 import { TimerCard } from "@/components/worker/timer-card";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -27,28 +28,117 @@ interface TimeEntryRow {
   } | null;
 }
 
-export default async function WorkerPage() {
+function formatForDatetimeLocal(value: string) {
+  const date = new Date(value);
+  const offset = date.getTimezoneOffset() * 60000;
+  const local = new Date(date.getTime() - offset);
+  return local.toISOString().slice(0, 16);
+}
+
+export default async function WorkerPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ projectId?: string; from?: string; to?: string; editTimeEntryId?: string; deleteTimeEntryId?: string }> | { projectId?: string; from?: string; to?: string; editTimeEntryId?: string; deleteTimeEntryId?: string };
+}) {
   const locale = await getLocale();
   const tag = localeTag(locale);
   const profile = await requireRole(["worker"]);
   const supabase = await createClient();
 
-  const [{ data: assignedRows }, { data: timeEntries }] = await Promise.all([
+  const params = await Promise.resolve(searchParams ?? {});
+  const projectIdFilter = params.projectId?.trim();
+  const fromParam = params.from?.trim();
+  const toParam = params.to?.trim();
+  const editTimeEntryIdParam = params.editTimeEntryId;
+  const deleteTimeEntryIdParam = params.deleteTimeEntryId;
+
+  const fromDate = fromParam ? new Date(fromParam) : null;
+  const toDate = toParam ? new Date(toParam) : null;
+  const validFromDate = fromDate && !Number.isNaN(fromDate.getTime()) ? fromDate : null;
+  const validToDate = toDate && !Number.isNaN(toDate.getTime()) ? toDate : null;
+
+  let timeEntriesQuery = supabase
+    .from("time_entries")
+    .select("id,project_id,started_at,ended_at,description,source,projects(name)")
+    .eq("worker_id", profile.id)
+    .order("started_at", { ascending: false });
+
+  if (projectIdFilter) {
+    timeEntriesQuery = timeEntriesQuery.eq("project_id", projectIdFilter);
+  }
+
+  if (validFromDate) {
+    timeEntriesQuery = timeEntriesQuery.gte("started_at", validFromDate.toISOString());
+  }
+
+  if (validToDate) {
+    timeEntriesQuery = timeEntriesQuery.lte("started_at", validToDate.toISOString());
+  }
+
+  const [
+    { data: assignedRows },
+    { data: timeEntries },
+    { data: runningFromDb },
+    { data: editingEntryFromDb },
+    { data: deletingEntryFromDb },
+  ] = await Promise.all([
     supabase
       .from("project_workers")
       .select("project_id,projects(id,name)")
       .eq("worker_id", profile.id),
+    timeEntriesQuery.limit(20),
     supabase
       .from("time_entries")
       .select("id,project_id,started_at,ended_at,description,source,projects(name)")
       .eq("worker_id", profile.id)
+      .is("ended_at", null)
       .order("started_at", { ascending: false })
-      .limit(20),
+      .limit(1)
+      .maybeSingle<TimeEntryRow>(),
+      editTimeEntryIdParam
+      ? supabase
+          .from("time_entries")
+          .select("id,project_id,started_at,ended_at,description,source,projects(name)")
+          .eq("worker_id", profile.id)
+          .eq("id", editTimeEntryIdParam)
+          .maybeSingle<TimeEntryRow>()
+      : Promise.resolve({ data: null }),
+      deleteTimeEntryIdParam
+      ? supabase
+          .from("time_entries")
+          .select("id,project_id,started_at,ended_at,description,source,projects(name)")
+          .eq("worker_id", profile.id)
+          .eq("id", deleteTimeEntryIdParam)
+          .maybeSingle<TimeEntryRow>()
+      : Promise.resolve({ data: null }),
   ]);
 
   const assignedProjects = (assignedRows ?? []) as unknown as WorkerProjectRow[];
   const entries = (timeEntries ?? []) as unknown as TimeEntryRow[];
-  const running = entries.find((entry) => !entry.ended_at);
+  const running = runningFromDb;
+
+  const activeFilterProjectIds = new Set(assignedProjects.map((row) => row.project_id));
+
+  const baseFilterParams = {
+    ...(projectIdFilter ? { projectId: projectIdFilter } : {}),
+    ...(fromParam ? { from: fromParam } : {}),
+    ...(toParam ? { to: toParam } : {}),
+  };
+
+  const withBaseFilterParams = (extra: Partial<Record<string, string>>) => {
+    const merged = { ...baseFilterParams, ...extra };
+    const query = new URLSearchParams(merged);
+    const suffix = query.toString();
+    return suffix ? `/worker?${suffix}` : "/worker";
+  };
+
+  const noDateText = formatForDatetimeLocal(new Date().toISOString());
+  const fromInputValue = validFromDate ? formatForDatetimeLocal(validFromDate.toISOString()) : "";
+  const toInputValue = validToDate ? formatForDatetimeLocal(validToDate.toISOString()) : "";
+  const editingTimeEntry = (editingEntryFromDb ?? null) as TimeEntryRow | null;
+  const deletingTimeEntry = (deletingEntryFromDb ?? null) as TimeEntryRow | null;
+  const activeEditEntry = editingTimeEntry && !editingTimeEntry.ended_at ? null : editingTimeEntry;
+  const activeDeleteEntry = deletingTimeEntry && !deletingTimeEntry.ended_at ? null : deletingTimeEntry;
 
   return (
     <main className="w-full">
@@ -67,7 +157,7 @@ export default async function WorkerPage() {
         <LogoutButton />
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         <div className="lg:col-span-2 space-y-6">
           {running ? (
             <section className="glass-card rounded-2xl p-6 md:p-8 border border-brand-500/30 relative overflow-hidden">
@@ -148,8 +238,60 @@ export default async function WorkerPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                 </svg>
                 {t(locale, "Recent Activity", "Attività recenti")}
-              </h2>
+                </h2>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <Link href="/worker" className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-medium text-zinc-300 hover:bg-zinc-800/70 transition-colors">
+                    {t(locale, "Clear", "Pulisci")}
+                  </Link>
+                  <span className="text-xs text-zinc-500">{t(locale, "Showing", "Mostrando")}: {entries.length}</span>
+                </div>
             </div>
+
+            <form className="mb-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" method="GET">
+              <div className="space-y-1.5">
+                <label htmlFor="projectId" className="text-xs font-medium text-zinc-400">{t(locale, "Project", "Progetto")}</label>
+                <select
+                  id="projectId"
+                  name="projectId"
+                  defaultValue={projectIdFilter ?? ""}
+                  className="w-full rounded-lg bg-zinc-900/50 border border-zinc-800 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all appearance-none"
+                >
+                  <option value="" className="bg-zinc-900">{t(locale, "All projects", "Tutti i progetti")}</option>
+                  {assignedProjects.map((row) => (
+                    <option key={row.project_id} value={row.project_id} className="bg-zinc-900">
+                      {row.projects?.name || row.project_id}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="from" className="text-xs font-medium text-zinc-400">{t(locale, "From", "Da")}</label>
+                <input
+                  id="from"
+                  name="from"
+                  type="datetime-local"
+                  defaultValue={fromInputValue}
+                  className="w-full rounded-lg bg-zinc-900/50 border border-zinc-800 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all [color-scheme:dark]"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="to" className="text-xs font-medium text-zinc-400">{t(locale, "To", "A")}</label>
+                <input
+                  id="to"
+                  name="to"
+                  type="datetime-local"
+                  defaultValue={toInputValue}
+                  min={fromInputValue || undefined}
+                  max={noDateText}
+                  className="w-full rounded-lg bg-zinc-900/50 border border-zinc-800 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all [color-scheme:dark]"
+                />
+              </div>
+              <div className="space-y-1.5 lg:items-end flex lg:pt-6">
+                <button className="w-full rounded-lg bg-zinc-800 px-4 py-2 text-xs font-medium text-white transition-all hover:bg-zinc-700 hover:border-zinc-600 border border-zinc-700">
+                  {t(locale, "Apply Filters", "Applica filtri")}
+                </button>
+              </div>
+            </form>
             
             <div className="overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/20">
               <div className="overflow-x-auto">
@@ -160,16 +302,18 @@ export default async function WorkerPage() {
                       <th className="px-4 py-3 font-medium">{t(locale, "Time Window", "Intervallo orario")}</th>
                       <th className="px-4 py-3 font-medium">{t(locale, "Type", "Tipo")}</th>
                       <th className="px-4 py-3 font-medium">{t(locale, "Description", "Descrizione")}</th>
+                      <th className="px-4 py-3 font-medium text-right">{t(locale, "Actions", "Azioni")}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-800/60">
                     {entries.length === 0 ? (
                       <tr>
-                        <td colSpan={4} className="px-4 py-8 text-center text-zinc-500">{t(locale, "No time entries recorded yet.", "Nessuna voce di tempo registrata.")}</td>
+                        <td colSpan={5} className="px-4 py-8 text-center text-zinc-500">{t(locale, "No time entries recorded yet.", "Nessuna voce di tempo registrata.")}</td>
                       </tr>
                     ) : (
                       entries.map((entry) => {
                         const isRunning = !entry.ended_at;
+                        const canModify = !isRunning;
                         return (
                           <tr key={entry.id} className={`hover:bg-zinc-800/30 transition-colors ${isRunning ? 'bg-brand-900/10' : ''}`}>
                             <td className="px-4 py-3 font-medium text-zinc-200">{entry.projects?.name || t(locale, "Unknown", "Sconosciuto")}</td>
@@ -200,6 +344,35 @@ export default async function WorkerPage() {
                             <td className="px-4 py-3 text-zinc-400 max-w-xs truncate" title={entry.description || ""}>
                               {entry.description || <span className="text-zinc-600 italic">{t(locale, "No description", "Nessuna descrizione")}</span>}
                             </td>
+                              <td className="px-4 py-3">
+                                <div className="flex justify-end gap-2">
+                                  {canModify ? (
+                                    <Link
+                                      href={withBaseFilterParams({ editTimeEntryId: entry.id })}
+                                      className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-800/70"
+                                    >
+                                      {t(locale, "Edit", "Modifica")}
+                                    </Link>
+                                  ) : (
+                                    <span className="rounded-md border border-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-600">
+                                      {t(locale, "Edit", "Modifica")}
+                                    </span>
+                                  )}
+
+                                  {canModify ? (
+                                    <Link
+                                      href={withBaseFilterParams({ deleteTimeEntryId: entry.id })}
+                                      className="rounded-md border border-red-500/40 px-3 py-1.5 text-xs font-medium text-red-300 transition-colors hover:bg-red-500/10"
+                                    >
+                                      {t(locale, "Delete", "Elimina")}
+                                    </Link>
+                                  ) : (
+                                    <span className="rounded-md border border-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-600">
+                                      {t(locale, "Delete", "Elimina")}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
                           </tr>
                         );
                       })
@@ -260,6 +433,114 @@ export default async function WorkerPage() {
             </form>
           </section>
         </div>
+
+        {activeEditEntry && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-2xl rounded-2xl border border-zinc-800 bg-zinc-950 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-4">
+                <h3 className="text-lg font-semibold text-white">{t(locale, "Edit Time Entry", "Modifica voce tempo")}</h3>
+                <Link href={withBaseFilterParams({})} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-800/70 transition-colors">
+                  {t(locale, "Close", "Chiudi")}
+                </Link>
+              </div>
+
+              <form action={updateTimeEntryAction} className="grid gap-4 p-5 md:grid-cols-2">
+                <input type="hidden" name="timeEntryId" value={activeEditEntry.id} />
+
+                <div className="space-y-1.5 md:col-span-2">
+                  <label htmlFor="modal-time-project" className="text-sm font-medium text-zinc-300">{t(locale, "Project", "Progetto")}</label>
+                  <select
+                    id="modal-time-project"
+                    name="projectId"
+                    required
+                    defaultValue={activeEditEntry.project_id}
+                    className="w-full rounded-lg bg-zinc-900/50 border border-zinc-800 px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
+                  >
+                    {assignedProjects.filter((row) => activeFilterProjectIds.has(row.project_id) || row.project_id === activeEditEntry.project_id).map((row) => (
+                      <option key={row.project_id} value={row.project_id} className="bg-zinc-900">
+                        {row.projects?.name || row.project_id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label htmlFor="modal-time-started" className="text-sm font-medium text-zinc-300">{t(locale, "Start Time", "Ora inizio")}</label>
+                  <input
+                    id="modal-time-started"
+                    name="startedAt"
+                    type="datetime-local"
+                    required
+                    defaultValue={formatForDatetimeLocal(activeEditEntry.started_at)}
+                    className="w-full rounded-lg bg-zinc-900/50 border border-zinc-800 px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all [color-scheme:dark]"
+                    />
+                  </div>
+
+                <div className="space-y-1.5">
+                  <label htmlFor="modal-time-ended" className="text-sm font-medium text-zinc-300">{t(locale, "End Time", "Ora fine")}</label>
+                    <input
+                      id="modal-time-ended"
+                      name="endedAt"
+                      type="datetime-local"
+                      required
+                      defaultValue={formatForDatetimeLocal(activeEditEntry.ended_at || noDateText)}
+                      min={activeEditEntry.started_at ? formatForDatetimeLocal(activeEditEntry.started_at) : undefined}
+                      max={noDateText}
+                      className="w-full rounded-lg bg-zinc-900/50 border border-zinc-800 px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all [color-scheme:dark]"
+                    />
+                </div>
+
+                <div className="space-y-1.5 md:col-span-2">
+                  <label htmlFor="modal-time-description" className="text-sm font-medium text-zinc-300">{t(locale, "Description", "Descrizione")}</label>
+                  <textarea
+                    id="modal-time-description"
+                    name="description"
+                    defaultValue={activeEditEntry.description ?? ""}
+                    rows={4}
+                    className="w-full rounded-lg bg-zinc-900/50 border border-zinc-800 px-4 py-2.5 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all resize-none"
+                  />
+                </div>
+
+                <div className="md:col-span-2 flex items-center justify-end gap-2">
+                  <Link href={withBaseFilterParams({})} className="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800/70 transition-colors">
+                    {t(locale, "Cancel", "Annulla")}
+                  </Link>
+                  <button type="submit" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-500 transition-colors">
+                    {t(locale, "Save Changes", "Salva modifiche")}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {activeDeleteEntry && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-950 shadow-2xl">
+              <div className="border-b border-zinc-800 px-5 py-4">
+                <h3 className="text-lg font-semibold text-white">{t(locale, "Confirm Deletion", "Conferma eliminazione")}</h3>
+              </div>
+
+              <div className="space-y-4 px-5 py-4">
+                <p className="text-sm text-zinc-300">
+                  {t(locale, "Are you sure you want to delete", "Sei sicuro di voler eliminare")} <span className="font-semibold text-white">{activeDeleteEntry.projects?.name || activeDeleteEntry.project_id}</span>? {t(locale, "This action cannot be undone.", "Questa azione non può essere annullata.")}
+                </p>
+
+                <div className="flex items-center justify-end gap-2">
+                  <Link href={withBaseFilterParams({})} className="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800/70 transition-colors">
+                    {t(locale, "Cancel", "Annulla")}
+                  </Link>
+                  <form action={deleteTimeEntryAction}>
+                    <input type="hidden" name="timeEntryId" value={activeDeleteEntry.id} />
+                    <button type="submit" className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 transition-colors">
+                      {t(locale, "Delete", "Elimina")}
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </main>
   );
