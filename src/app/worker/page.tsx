@@ -1,4 +1,6 @@
 import { createManualTimeEntryAction, deleteTimeEntryAction, startTimerAction, stopTimerAction, updateTimeEntryAction } from "@/app/actions/time-entries";
+import { EditTimeEntryModal } from "@/components/worker/edit-time-entry-modal";
+import { WorkerQueryToast } from "@/components/worker/worker-query-toast";
 import { LogoutButton } from "@/components/logout-button";
 import Link from "next/link";
 import { TimerCard } from "@/components/worker/timer-card";
@@ -39,7 +41,7 @@ function formatForDatetimeLocal(value: string) {
 export default async function WorkerPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ projectId?: string; from?: string; to?: string; editTimeEntryId?: string; deleteTimeEntryId?: string }> | { projectId?: string; from?: string; to?: string; editTimeEntryId?: string; deleteTimeEntryId?: string };
+  searchParams?: Promise<{ projectId?: string; from?: string; to?: string; editTimeEntryId?: string; deleteTimeEntryId?: string; toast?: string; toastMessage?: string }> | { projectId?: string; from?: string; to?: string; editTimeEntryId?: string; deleteTimeEntryId?: string; toast?: string; toastMessage?: string };
 }) {
   const locale = await getLocale();
   const tag = localeTag(locale);
@@ -52,6 +54,8 @@ export default async function WorkerPage({
   const toParam = params.to?.trim();
   const editTimeEntryIdParam = params.editTimeEntryId;
   const deleteTimeEntryIdParam = params.deleteTimeEntryId;
+  const toastTypeParam = params.toast?.trim();
+  const toastMessageParam = params.toastMessage?.trim();
 
   const fromDate = fromParam ? new Date(fromParam) : null;
   const toDate = toParam ? new Date(toParam) : null;
@@ -140,9 +144,30 @@ export default async function WorkerPage({
   const deletingTimeEntry = (deletingEntryFromDb ?? null) as TimeEntryRow | null;
   const activeEditEntry = editingTimeEntry && !editingTimeEntry.ended_at ? null : editingTimeEntry;
   const activeDeleteEntry = deletingTimeEntry && !deletingTimeEntry.ended_at ? null : deletingTimeEntry;
+  const toastVariant: "success" | "error" | null = toastTypeParam === "success"
+    ? "success"
+    : toastTypeParam === "error"
+      ? "error"
+      : null;
+  const activeToast = toastVariant && toastMessageParam
+    ? { variant: toastVariant, message: toastMessageParam }
+    : null;
+  const editProjectOptions = activeEditEntry
+    ? assignedProjects
+        .filter((row) => activeFilterProjectIds.has(row.project_id) || row.project_id === activeEditEntry.project_id)
+        .map((row) => ({ id: row.project_id, name: row.projects?.name || row.project_id }))
+    : [];
 
   return (
     <main className="w-full">
+      {activeToast && (
+        <WorkerQueryToast
+          variant={activeToast.variant}
+          message={activeToast.message}
+          closeLabel={t(locale, "Close", "Chiudi")}
+        />
+      )}
+
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 pb-6 border-b border-white/10">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-white flex items-center gap-3">
@@ -438,83 +463,31 @@ export default async function WorkerPage({
         </div>
 
         {activeEditEntry && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-            <div className="w-full max-w-2xl rounded-2xl border border-zinc-800 bg-zinc-950 shadow-2xl">
-              <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-4">
-                <h3 className="text-lg font-semibold text-white">{t(locale, "Edit Time Entry", "Modifica voce tempo")}</h3>
-                <Link href={withBaseFilterParams({})} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-800/70 transition-colors">
-                  {t(locale, "Close", "Chiudi")}
-                </Link>
-              </div>
-
-              <form action={updateTimeEntryAction} className="grid gap-4 p-5 md:grid-cols-2">
-                <input type="hidden" name="timeEntryId" value={activeEditEntry.id} />
-
-                <div className="space-y-1.5 md:col-span-2">
-                  <label htmlFor="modal-time-project" className="text-sm font-medium text-zinc-300">{t(locale, "Project", "Progetto")}</label>
-                  <select
-                    id="modal-time-project"
-                    name="projectId"
-                    required
-                    defaultValue={activeEditEntry.project_id}
-                    className="w-full rounded-lg bg-zinc-900/50 border border-zinc-800 px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
-                  >
-                    {assignedProjects.filter((row) => activeFilterProjectIds.has(row.project_id) || row.project_id === activeEditEntry.project_id).map((row) => (
-                      <option key={row.project_id} value={row.project_id} className="bg-zinc-900">
-                        {row.projects?.name || row.project_id}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label htmlFor="modal-time-started" className="text-sm font-medium text-zinc-300">{t(locale, "Start Time", "Ora inizio")}</label>
-                  <input
-                    id="modal-time-started"
-                    name="startedAt"
-                    type="datetime-local"
-                    required
-                    defaultValue={formatForDatetimeLocal(activeEditEntry.started_at)}
-                    className="w-full rounded-lg bg-zinc-900/50 border border-zinc-800 px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all [color-scheme:dark]"
-                    />
-                  </div>
-
-                <div className="space-y-1.5">
-                  <label htmlFor="modal-time-ended" className="text-sm font-medium text-zinc-300">{t(locale, "End Time", "Ora fine")}</label>
-                    <input
-                      id="modal-time-ended"
-                      name="endedAt"
-                      type="datetime-local"
-                      required
-                      defaultValue={formatForDatetimeLocal(activeEditEntry.ended_at || noDateText)}
-                      min={activeEditEntry.started_at ? formatForDatetimeLocal(activeEditEntry.started_at) : undefined}
-                      max={noDateText}
-                      className="w-full rounded-lg bg-zinc-900/50 border border-zinc-800 px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all [color-scheme:dark]"
-                    />
-                </div>
-
-                <div className="space-y-1.5 md:col-span-2">
-                  <label htmlFor="modal-time-description" className="text-sm font-medium text-zinc-300">{t(locale, "Description", "Descrizione")}</label>
-                  <textarea
-                    id="modal-time-description"
-                    name="description"
-                    defaultValue={activeEditEntry.description ?? ""}
-                    rows={4}
-                    className="w-full rounded-lg bg-zinc-900/50 border border-zinc-800 px-4 py-2.5 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all resize-none"
-                  />
-                </div>
-
-                <div className="md:col-span-2 flex items-center justify-end gap-2">
-                  <Link href={withBaseFilterParams({})} className="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800/70 transition-colors">
-                    {t(locale, "Cancel", "Annulla")}
-                  </Link>
-                  <button type="submit" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-500 transition-colors">
-                    {t(locale, "Save Changes", "Salva modifiche")}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
+          <EditTimeEntryModal
+            timeEntryId={activeEditEntry.id}
+            projectId={activeEditEntry.project_id}
+            startedAt={formatForDatetimeLocal(activeEditEntry.started_at)}
+            endedAt={formatForDatetimeLocal(activeEditEntry.ended_at || noDateText)}
+            maxEndedAt={noDateText}
+            description={activeEditEntry.description ?? ""}
+            projectOptions={editProjectOptions}
+            closeHref={withBaseFilterParams({})}
+            successRedirectHref={withBaseFilterParams({})}
+            updateTimeEntryAction={updateTimeEntryAction}
+            labels={{
+              title: t(locale, "Edit Time Entry", "Modifica voce tempo"),
+              close: t(locale, "Close", "Chiudi"),
+              cancel: t(locale, "Cancel", "Annulla"),
+              saveChanges: t(locale, "Save Changes", "Salva modifiche"),
+              saving: t(locale, "Saving...", "Salvataggio..."),
+              project: t(locale, "Project", "Progetto"),
+              startTime: t(locale, "Start Time", "Ora inizio"),
+              endTime: t(locale, "End Time", "Ora fine"),
+              description: t(locale, "Description", "Descrizione"),
+              successMessage: t(locale, "Time entry updated successfully", "Voce tempo aggiornata con successo"),
+              genericErrorMessage: t(locale, "An error occurred while updating the time entry.", "Si è verificato un errore durante l'aggiornamento della voce tempo."),
+            }}
+          />
         )}
 
         {activeDeleteEntry && (
