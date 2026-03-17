@@ -471,7 +471,7 @@ export default async function AdminPage({
                <span className="bg-blue-500/10 text-blue-400 text-xs font-bold px-2 py-1 rounded-md">{t(locale, "Stripe Refill Pricing", "Prezzi ricarica Stripe")}</span>
              </div>
 
-            <div className="overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/20 mb-8">
+            <div className="overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/20">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left">
                   <thead className="text-xs text-zinc-400 uppercase bg-zinc-900/50 border-b border-zinc-800">
@@ -538,7 +538,9 @@ export default async function AdminPage({
                 </table>
               </div>
             </div>
+          </section>
 
+          <section className="glass-card rounded-2xl p-6 border border-zinc-800">
              <h2 className="text-xl font-semibold text-white mb-6">{t(locale, "Invite User", "Invita utente")}</h2>
              <form action={inviteUserAction} className="grid gap-4 sm:grid-cols-2">
                <div className="space-y-1.5 sm:col-span-2">
@@ -573,7 +575,7 @@ export default async function AdminPage({
               </div>
 
               <div className="sm:col-span-2 mt-2">
-                <button className="w-full rounded-lg bg-zinc-800 px-4 py-3 font-medium text-white transition-all hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600">
+               <button className="w-full rounded-lg bg-zinc-800 px-4 py-3 font-medium text-white transition-all hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600">
                   {t(locale, "Send Invitation", "Invia invito")}
                 </button>
               </div>
