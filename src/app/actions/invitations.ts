@@ -4,10 +4,12 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { AppRole } from "@/lib/types";
+import { getLocale, t } from "@/lib/i18n";
 
 const allowedRoles: AppRole[] = ["admin", "customer", "worker"];
 
 export async function inviteUserAction(formData: FormData) {
+  const locale = await getLocale();
   const adminProfile = await requireRole(["admin"]);
 
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
@@ -15,7 +17,7 @@ export async function inviteUserAction(formData: FormData) {
   const role = String(formData.get("role") ?? "worker").trim() as AppRole;
 
   if (!email || !allowedRoles.includes(role)) {
-    throw new Error("Invalid invitation payload");
+    throw new Error(t(locale, "Invalid invitation payload", "Payload invito non valido"));
   }
 
   const supabase = await createClient();

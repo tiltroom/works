@@ -3,8 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth";
+import { getLocale, t } from "@/lib/i18n";
 
 export async function createProjectAction(formData: FormData) {
+  const locale = await getLocale();
   await requireRole(["admin"]);
 
   const name = String(formData.get("name") ?? "").trim();
@@ -17,7 +19,7 @@ export async function createProjectAction(formData: FormData) {
     .filter((value): value is string => value.length > 0);
 
   if (!name || !customerId || Number.isNaN(assignedHours) || assignedHours < 0) {
-    throw new Error("Invalid project payload");
+    throw new Error(t(locale, "Invalid project payload", "Payload progetto non valido"));
   }
 
   const supabase = await createClient();
@@ -55,13 +57,14 @@ export async function createProjectAction(formData: FormData) {
 }
 
 export async function assignWorkerAction(formData: FormData) {
+  const locale = await getLocale();
   await requireRole(["admin"]);
 
   const projectId = String(formData.get("projectId") ?? "").trim();
   const workerId = String(formData.get("workerId") ?? "").trim();
 
   if (!projectId || !workerId) {
-    throw new Error("Invalid assignment payload");
+    throw new Error(t(locale, "Invalid assignment payload", "Payload assegnazione non valido"));
   }
 
   const supabase = await createClient();
@@ -77,6 +80,7 @@ export async function assignWorkerAction(formData: FormData) {
 }
 
 export async function updateProjectAction(formData: FormData) {
+  const locale = await getLocale();
   await requireRole(["admin"]);
 
   const projectId = String(formData.get("projectId") ?? "").trim();
@@ -89,7 +93,7 @@ export async function updateProjectAction(formData: FormData) {
     .filter((value): value is string => value.length > 0);
 
   if (!projectId || !name || !customerId) {
-    throw new Error("Invalid project payload");
+    throw new Error(t(locale, "Invalid project payload", "Payload progetto non valido"));
   }
 
   const supabase = await createClient();
@@ -130,12 +134,13 @@ export async function updateProjectAction(formData: FormData) {
 }
 
 export async function deleteProjectAction(formData: FormData) {
+  const locale = await getLocale();
   await requireRole(["admin"]);
 
   const projectId = String(formData.get("projectId") ?? "").trim();
 
   if (!projectId) {
-    throw new Error("Invalid project payload");
+    throw new Error(t(locale, "Invalid project payload", "Payload progetto non valido"));
   }
 
   const supabase = await createClient();
