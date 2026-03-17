@@ -7,9 +7,11 @@ interface TimerCardProps {
   startedAt: string;
   projectName: string;
   description: string | null;
+  elapsedLabel: string;
+  noDescriptionLabel: string;
 }
 
-export function TimerCard({ startedAt, projectName, description }: TimerCardProps) {
+export function TimerCard({ startedAt, projectName, description, elapsedLabel, noDescriptionLabel }: TimerCardProps) {
   const [elapsed, setElapsed] = useState("00:00:00");
 
   useEffect(() => {
@@ -39,13 +41,13 @@ export function TimerCard({ startedAt, projectName, description }: TimerCardProp
       {description ? (
         <p className="text-zinc-400 text-sm max-w-md line-clamp-2 leading-relaxed">{description}</p>
       ) : (
-        <p className="text-zinc-500 text-sm italic">No description provided</p>
+        <p className="text-zinc-500 text-sm italic">{noDescriptionLabel}</p>
       )}
       <div className="mt-4 flex items-baseline gap-2">
         <span className="text-5xl font-mono font-bold tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-brand-300 to-white drop-shadow-[0_0_10px_rgba(255,255,255,0.3)] tabular-nums">
           {elapsed}
         </span>
-        <span className="text-sm font-medium text-brand-400">elapsed</span>
+        <span className="text-sm font-medium text-brand-400">{elapsedLabel}</span>
       </div>
     </div>
   );
