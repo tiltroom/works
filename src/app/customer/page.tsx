@@ -4,6 +4,7 @@ import { hoursToDisplay, millisecondsToHours } from "@/lib/time";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getLocale, localeTag, t } from "@/lib/i18n";
+import { RecentActivityToggle } from "./recent-activity-toggle";
 
 export const dynamic = "force-dynamic";
 
@@ -20,9 +21,11 @@ interface ProjectTimeRow {
   ended_at: string | null;
   description: string | null;
   worker_id: string;
-  profiles: {
-    full_name: string | null;
-  } | null;
+}
+
+interface WorkerProfileRow {
+  id: string;
+  full_name: string | null;
 }
 
 interface PurchaseRow {
@@ -44,6 +47,33 @@ function totalUsedHours(entries: ProjectTimeRow[]) {
   }, 0);
 }
 
+function formatEntryDuration(locale: "en" | "it", startedAt: string, endedAt: string | null) {
+  if (!endedAt) {
+    return t(locale, "Running", "In corso");
+  }
+
+  const totalMinutes = Math.max(
+    Math.round((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 60_000),
+    0,
+  );
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours > 0 && minutes > 0) {
+    return t(locale, `${hours}h ${minutes}m`, `${hours}h ${minutes} min`);
+  }
+
+  if (hours > 0) {
+    return t(locale, `${hours}h`, `${hours}h`);
+  }
+
+  if (minutes > 0) {
+    return t(locale, `${minutes}m`, `${minutes} min`);
+  }
+
+  return t(locale, "< 1m", "< 1 min");
+}
+
 export default async function CustomerPage() {
   const locale = await getLocale();
   const tag = localeTag(locale);
@@ -62,7 +92,7 @@ export default async function CustomerPage() {
   const { data: timeEntries } = projectIds.length
     ? await supabase
         .from("time_entries")
-        .select("id,project_id,started_at,ended_at,description,worker_id,profiles!time_entries_worker_id_fkey(full_name)")
+        .select("id,project_id,started_at,ended_at,description,worker_id")
         .in("project_id", projectIds)
         .order("started_at", { ascending: false })
         .limit(50)
@@ -70,6 +100,13 @@ export default async function CustomerPage() {
 
   const customerProjects = (projects ?? []) as CustomerProjectRow[];
   const entries = (timeEntries ?? []) as unknown as ProjectTimeRow[];
+  const workerIds = [...new Set(entries.map((entry) => entry.worker_id).filter(Boolean))];
+  const { data: workerProfiles } = workerIds.length
+    ? await supabase.from("profiles").select("id,full_name").in("id", workerIds)
+    : { data: [] };
+  const workerNameById = new Map(
+    ((workerProfiles ?? []) as WorkerProfileRow[]).map((worker) => [worker.id, worker.full_name?.trim() || null]),
+  );
   const billingRows = (purchases ?? []) as PurchaseRow[];
 
   return (
@@ -181,49 +218,59 @@ export default async function CustomerPage() {
                   </div>
 
                   {projectEntries.length > 0 && (
-                    <div className="mt-6 border-t border-zinc-800/60 pt-6">
-                      <h4 className="text-sm font-medium text-zinc-400 mb-4 uppercase tracking-wider">{t(locale, "Recent Activity", "Attività recenti")}</h4>
+                    <RecentActivityToggle
+                      title={t(locale, "Recent Activity", "Attività recenti")}
+                      showLabel={t(locale, "Show", "Mostra")}
+                      hideLabel={t(locale, "Hide", "Nascondi")}
+                    >
                       <div className="overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/20">
                         <div className="overflow-x-auto">
                           <table className="w-full text-sm text-left">
                             <thead className="text-xs text-zinc-400 uppercase bg-zinc-900/50 border-b border-zinc-800">
-                              <tr>
-                                <th className="px-4 py-3 font-medium">{t(locale, "Worker", "Operatore")}</th>
-                                <th className="px-4 py-3 font-medium">{t(locale, "Started", "Iniziato")}</th>
-                                <th className="px-4 py-3 font-medium">{t(locale, "Ended", "Terminato")}</th>
-                                <th className="px-4 py-3 font-medium">{t(locale, "Description", "Descrizione")}</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-zinc-800/60">
-                              {projectEntries.map((entry) => (
-                                <tr key={entry.id} className="hover:bg-zinc-800/30 transition-colors">
-                                  <td className="px-4 py-3 font-medium text-zinc-200">
-                                    <div className="flex items-center gap-2">
-                                      <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-xs text-zinc-400 border border-zinc-700">
-                                        {(entry.profiles?.full_name || entry.worker_id || "?")[0].toUpperCase()}
+                             <tr>
+                               <th className="px-4 py-3 font-medium">{t(locale, "Worker", "Operatore")}</th>
+                               <th className="px-4 py-3 font-medium">{t(locale, "Started", "Iniziato")}</th>
+                               <th className="px-4 py-3 font-medium">{t(locale, "Ended", "Terminato")}</th>
+                               <th className="px-4 py-3 font-medium">{t(locale, "Duration", "Durata")}</th>
+                               <th className="px-4 py-3 font-medium">{t(locale, "Description", "Descrizione")}</th>
+                             </tr>
+                           </thead>
+                           <tbody className="divide-y divide-zinc-800/60">
+                              {projectEntries.map((entry) => {
+                                const workerName = workerNameById.get(entry.worker_id) || t(locale, "Unknown worker", "Operatore sconosciuto");
+                                const durationLabel = formatEntryDuration(locale as "en" | "it", entry.started_at, entry.ended_at);
+
+                                return (
+                                  <tr key={entry.id} className="hover:bg-zinc-800/30 transition-colors">
+                                    <td className="px-4 py-3 font-medium text-zinc-200">
+                                      <div className="flex items-center gap-2">
+                                        <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-xs text-zinc-400 border border-zinc-700">
+                                          {(workerName[0] || "?").toUpperCase()}
+                                        </div>
+                                        {workerName}
                                       </div>
-                                      {entry.profiles?.full_name || entry.worker_id}
-                                    </div>
-                                  </td>
-                                  <td className="px-4 py-3 text-zinc-400">{new Date(entry.started_at).toLocaleString(tag)}</td>
-                                  <td className="px-4 py-3">
-                                    {entry.ended_at ? (
-                                      <span className="text-zinc-400">{new Date(entry.ended_at).toLocaleString(tag)}</span>
-                                    ) : (
-                                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-brand-500/10 text-brand-400 border border-brand-500/20">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse"></span>
-                                        {t(locale, "Running", "In corso")}
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td className="px-4 py-3 text-zinc-400">{entry.description || <span className="text-zinc-600 italic">{t(locale, "No description", "Nessuna descrizione")}</span>}</td>
-                                </tr>
-                              ))}
+                                    </td>
+                                    <td className="px-4 py-3 text-zinc-400">{new Date(entry.started_at).toLocaleString(tag)}</td>
+                                    <td className="px-4 py-3">
+                                      {entry.ended_at ? (
+                                        <span className="text-zinc-400">{new Date(entry.ended_at).toLocaleString(tag)}</span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-brand-500/10 text-brand-400 border border-brand-500/20">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse"></span>
+                                          {t(locale, "Running", "In corso")}
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="px-4 py-3 text-zinc-400">{durationLabel}</td>
+                                    <td className="px-4 py-3 text-zinc-400">{entry.description || <span className="text-zinc-600 italic">{t(locale, "No description", "Nessuna descrizione")}</span>}</td>
+                                  </tr>
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>
                       </div>
-                    </div>
+                    </RecentActivityToggle>
                   )}
                 </div>
               );
