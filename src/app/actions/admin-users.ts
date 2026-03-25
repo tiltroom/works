@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 import { t } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n-server";
 
@@ -33,8 +32,8 @@ export async function updateCustomerHourlyRateAction(formData: FormData) {
     }
   }
 
-  const supabase = await createClient();
-  const { data: customer, error: customerError } = await supabase
+  const admin = createAdminClient();
+  const { data: customer, error: customerError } = await admin
     .from("profiles")
     .select("id,role")
     .eq("id", customerId)
@@ -44,7 +43,7 @@ export async function updateCustomerHourlyRateAction(formData: FormData) {
     throw new Error(t(locale, "Customer not found", "Cliente non trovato"));
   }
 
-  const { error: updateError } = await supabase
+  const { error: updateError } = await admin
     .from("profiles")
     .update({ custom_hourly_rate_cents: customHourlyRateCents })
     .eq("id", customerId);
