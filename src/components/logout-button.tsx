@@ -1,5 +1,6 @@
 import { logoutAction } from "@/app/actions/auth";
-import { getLocale, t } from "@/lib/i18n";
+import { t } from "@/lib/i18n";
+import { getLocale } from "@/lib/i18n-server";
 
 export async function LogoutButton() {
   const locale = await getLocale();
@@ -8,7 +9,7 @@ export async function LogoutButton() {
     <form action={logoutAction}>
       <button
         type="submit"
-        className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-2 text-sm font-medium text-zinc-300 transition-all hover:bg-zinc-800 hover:text-white hover:border-zinc-700 flex items-center gap-2"
+        className="flex items-center gap-2 rounded-lg border border-border bg-background/65 px-4 py-2 text-sm font-medium text-muted-foreground transition-all hover:bg-accent hover:text-accent-foreground"
       >
         <span>{t(locale, "Sign Out", "Esci")}</span>
         <svg className="w-4 h-4 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">

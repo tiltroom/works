@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth";
-import { getLocale, t } from "@/lib/i18n";
+import { t } from "@/lib/i18n";
+import { getLocale } from "@/lib/i18n-server";
 
 export async function createProjectAction(formData: FormData) {
   const locale = await getLocale();

@@ -98,11 +98,11 @@ export function EditTimeEntryModal({
         />
       )}
 
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-        <div className="w-full max-w-2xl rounded-2xl border border-zinc-800 bg-zinc-950 shadow-2xl">
-          <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-4">
-            <h3 className="text-lg font-semibold text-white">{labels.title}</h3>
-            <Link href={closeHref} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-300 transition-colors hover:bg-zinc-800/70">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
+        <div className="w-full max-w-2xl rounded-2xl border border-border bg-card shadow-2xl">
+          <div className="flex items-center justify-between border-b border-border px-5 py-4">
+            <h3 className="text-lg font-semibold text-foreground">{labels.title}</h3>
+            <Link href={closeHref} className="rounded-md border border-border bg-background/60 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
               {labels.close}
             </Link>
           </div>
@@ -111,7 +111,7 @@ export function EditTimeEntryModal({
             <input type="hidden" name="timeEntryId" value={timeEntryId} />
 
             <div className="space-y-1.5 md:col-span-2">
-              <label htmlFor="modal-time-project" className="text-sm font-medium text-zinc-300">
+              <label htmlFor="modal-time-project" className="text-sm font-medium text-foreground">
                 {labels.project}
               </label>
               <select
@@ -119,10 +119,10 @@ export function EditTimeEntryModal({
                 name="projectId"
                 required
                 defaultValue={projectId}
-                className="w-full rounded-lg bg-zinc-900/50 border border-zinc-800 px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
+                className="w-full rounded-lg border border-input bg-background/70 px-4 py-2.5 text-foreground focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
               >
                 {projectOptions.map((project) => (
-                  <option key={project.id} value={project.id} className="bg-zinc-900">
+                  <option key={project.id} value={project.id} className="bg-background text-foreground">
                     {project.name}
                   </option>
                 ))}
@@ -130,7 +130,7 @@ export function EditTimeEntryModal({
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="modal-time-started" className="text-sm font-medium text-zinc-300">
+              <label htmlFor="modal-time-started" className="text-sm font-medium text-foreground">
                 {labels.startTime}
               </label>
               <input
@@ -139,12 +139,12 @@ export function EditTimeEntryModal({
                 type="datetime-local"
                 required
                 defaultValue={startedAt}
-                className="w-full rounded-lg bg-zinc-900/50 border border-zinc-800 px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all [color-scheme:dark]"
+                className="w-full rounded-lg border border-input bg-background/70 px-4 py-2.5 text-foreground focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="modal-time-ended" className="text-sm font-medium text-zinc-300">
+              <label htmlFor="modal-time-ended" className="text-sm font-medium text-foreground">
                 {labels.endTime}
               </label>
               <input
@@ -155,12 +155,12 @@ export function EditTimeEntryModal({
                 defaultValue={endedAt}
                 min={startedAt || undefined}
                 max={maxEndedAt}
-                className="w-full rounded-lg bg-zinc-900/50 border border-zinc-800 px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all [color-scheme:dark]"
+                className="w-full rounded-lg border border-input bg-background/70 px-4 py-2.5 text-foreground focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
               />
             </div>
 
             <div className="space-y-1.5 md:col-span-2">
-              <label htmlFor="modal-time-description" className="text-sm font-medium text-zinc-300">
+              <label htmlFor="modal-time-description" className="text-sm font-medium text-foreground">
                 {labels.description}
               </label>
               <textarea
@@ -168,12 +168,12 @@ export function EditTimeEntryModal({
                 name="description"
                 defaultValue={description}
                 rows={4}
-                className="w-full rounded-lg bg-zinc-900/50 border border-zinc-800 px-4 py-2.5 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all resize-none"
+                className="w-full resize-none rounded-lg border border-input bg-background/70 px-4 py-2.5 text-foreground placeholder:text-muted-foreground focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
               />
             </div>
 
             <div className="md:col-span-2 flex items-center justify-end gap-2">
-              <Link href={closeHref} className="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-800/70">
+              <Link href={closeHref} className="rounded-lg border border-border bg-background/60 px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
                 {labels.cancel}
               </Link>
               <button

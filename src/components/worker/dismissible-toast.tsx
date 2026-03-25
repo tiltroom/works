@@ -26,8 +26,8 @@ export function DismissibleToast({ variant, message, closeLabel, onClose, autoCl
       <div
         className={`rounded-2xl border px-4 py-3 shadow-2xl backdrop-blur ${
           isSuccess
-            ? "border-emerald-500/30 bg-emerald-950/95 text-emerald-50"
-            : "border-red-500/30 bg-red-950/95 text-red-50"
+            ? "border-emerald-500/30 bg-card/95 text-foreground"
+            : "border-red-500/30 bg-card/95 text-foreground"
         }`}
         role="status"
         aria-live="polite"
@@ -36,8 +36,8 @@ export function DismissibleToast({ variant, message, closeLabel, onClose, autoCl
           <span
             className={`mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border ${
               isSuccess
-                ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-300"
-                : "border-red-400/30 bg-red-500/15 text-red-300"
+                ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                : "border-red-500/30 bg-red-500/15 text-red-700 dark:text-red-300"
             }`}
           >
             {isSuccess ? (
@@ -52,7 +52,7 @@ export function DismissibleToast({ variant, message, closeLabel, onClose, autoCl
           </span>
 
           <div className="min-w-0 flex-1 pr-1">
-            <p className="text-sm font-medium leading-5">{message}</p>
+            <p className="text-sm font-medium leading-5 text-foreground">{message}</p>
           </div>
 
           <button

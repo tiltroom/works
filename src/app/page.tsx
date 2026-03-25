@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { getLocale, t } from "@/lib/i18n";
+import { t } from "@/lib/i18n";
+import { getLocale } from "@/lib/i18n-server";
 
 export default async function Home() {
   const locale = await getLocale();
@@ -15,7 +16,7 @@ export default async function Home() {
     <main className="flex min-h-[80vh] flex-col items-center justify-center p-6 text-center">
       <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-brand-900/40 via-background to-background"></div>
       
-      <div className="glass-card max-w-3xl rounded-3xl p-10 md:p-16 border border-white/10 shadow-2xl relative overflow-hidden">
+      <div className="glass-card relative max-w-3xl overflow-hidden rounded-3xl border border-border/70 p-10 shadow-2xl md:p-16">
         <div className="absolute -top-24 -right-24 w-48 h-48 bg-brand-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
         <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
 
@@ -43,7 +44,7 @@ export default async function Home() {
       
       <div className="mt-16 flex flex-wrap justify-center gap-3 max-w-4xl opacity-80">
         {features.map((feature) => (
-          <span key={feature} className="px-4 py-1.5 rounded-full text-sm font-medium border border-zinc-800 bg-zinc-900/50 text-zinc-400">
+          <span key={feature} className="rounded-full border border-border bg-card/75 px-4 py-1.5 text-sm font-medium text-muted-foreground backdrop-blur-sm">
             {feature}
           </span>
         ))}

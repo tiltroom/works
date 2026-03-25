@@ -5,7 +5,8 @@ import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import { getStripeClient } from "@/lib/stripe";
-import { getLocale, t } from "@/lib/i18n";
+import { t } from "@/lib/i18n";
+import { getLocale } from "@/lib/i18n-server";
 
 export async function createCheckoutForHoursAction(formData: FormData) {
   const locale = await getLocale();

@@ -7,7 +7,8 @@ import { TimerCard } from "@/components/worker/timer-card";
 import { StopTimerButton } from "@/components/worker/stop-timer-button";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { getLocale, localeTag, t } from "@/lib/i18n";
+import { localeTag, t } from "@/lib/i18n";
+import { getLocale } from "@/lib/i18n-server";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,13 @@ function formatForDatetimeLocal(value: string) {
   const local = new Date(date.getTime() - offset);
   return local.toISOString().slice(0, 16);
 }
+
+const panelClass = "rounded-2xl border border-border bg-card/80 backdrop-blur-sm";
+const tableShellClass = "overflow-hidden rounded-xl border border-border/70 bg-background/45";
+const tableHeadClass = "border-b border-border bg-muted/50 text-xs uppercase text-muted-foreground";
+const tableRowClass = "transition-colors hover:bg-accent/60";
+const inputClass = "w-full rounded-lg border border-input bg-background/75 px-4 py-3 text-foreground placeholder:text-muted-foreground focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all";
+const compactInputClass = "w-full rounded-lg border border-input bg-background/75 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all";
 
 export default async function WorkerPage({
   searchParams,
@@ -168,9 +176,9 @@ export default async function WorkerPage({
         />
       )}
 
-      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 pb-6 border-b border-white/10">
+      <header className="mb-8 flex flex-col justify-between gap-4 border-b border-border/70 pb-6 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-white flex items-center gap-3">
+          <h1 className="flex items-center gap-3 text-3xl font-bold tracking-tight text-foreground">
             <span className="p-2 bg-green-500/10 text-green-500 rounded-lg">
               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -178,7 +186,7 @@ export default async function WorkerPage({
             </span>
             {t(locale, "Worker Station", "Postazione operatore")}
           </h1>
-          <p className="text-zinc-400 mt-1">{t(locale, "Track your time, manage active sessions, and log hours.", "Monitora il tuo tempo, gestisci le sessioni attive e registra le ore.")}</p>
+          <p className="mt-1 text-muted-foreground">{t(locale, "Track your time, manage active sessions, and log hours.", "Monitora il tuo tempo, gestisci le sessioni attive e registra le ore.")}</p>
         </div>
         <LogoutButton />
       </header>
@@ -186,13 +194,13 @@ export default async function WorkerPage({
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         <div className="lg:col-span-2 space-y-6">
           {running ? (
-            <section className="glass-card rounded-2xl p-6 md:p-8 border border-brand-500/30 relative overflow-hidden">
+            <section className="relative overflow-hidden rounded-2xl border border-brand-500/30 bg-card/85 p-6 backdrop-blur-sm md:p-8">
               <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-brand-400 to-purple-500"></div>
               <div className="absolute -top-24 -right-24 w-48 h-48 bg-brand-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
               
               <div className="relative z-10 flex flex-col md:flex-row gap-6 items-center justify-between">
                 <div className="flex-1 w-full">
-                  <h2 className="text-sm font-medium text-brand-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                  <h2 className="mb-2 flex items-center gap-2 text-sm font-medium uppercase tracking-wider text-brand-600 dark:text-brand-400">
                     <span className="w-2 h-2 rounded-full bg-brand-400 animate-pulse"></span>
                     {t(locale, "Active Timer", "Timer attivo")}
                   </h2>
@@ -218,8 +226,8 @@ export default async function WorkerPage({
               </div>
             </section>
           ) : (
-            <section className="glass-card rounded-2xl p-6 md:p-8 border border-zinc-800">
-              <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
+            <section className={`${panelClass} p-6 md:p-8`}>
+              <h2 className="mb-6 flex items-center gap-2 text-xl font-semibold text-foreground">
                 <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -228,23 +236,23 @@ export default async function WorkerPage({
               </h2>
               <form action={startTimerAction} className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5 sm:col-span-2">
-                  <label htmlFor="projectId" className="text-sm font-medium text-zinc-300">{t(locale, "Project", "Progetto")}</label>
-                  <select id="projectId" name="projectId" required className="w-full rounded-lg bg-zinc-900/50 border border-zinc-800 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all appearance-none">
-                    <option value="" className="bg-zinc-900">{t(locale, "Select project to work on", "Seleziona un progetto su cui lavorare")}</option>
+                  <label htmlFor="projectId" className="text-sm font-medium text-foreground">{t(locale, "Project", "Progetto")}</label>
+                  <select id="projectId" name="projectId" required className={`${inputClass} appearance-none focus:ring-emerald-500`}>
+                    <option value="" className="bg-background text-foreground">{t(locale, "Select project to work on", "Seleziona un progetto su cui lavorare")}</option>
                     {assignedProjects.map((row) => (
-                      <option key={row.project_id} value={row.project_id} className="bg-zinc-900">
+                      <option key={row.project_id} value={row.project_id} className="bg-background text-foreground">
                         {row.projects?.name || row.project_id}
                       </option>
                     ))}
                   </select>
                 </div>
                 <div className="space-y-1.5 sm:col-span-2">
-                  <label htmlFor="description" className="text-sm font-medium text-zinc-300">{t(locale, "Task Description", "Descrizione attività")}</label>
+                  <label htmlFor="description" className="text-sm font-medium text-foreground">{t(locale, "Task Description", "Descrizione attività")}</label>
                   <input
                     id="description"
                     name="description"
                     placeholder={t(locale, "What are you working on?", "Su cosa stai lavorando?")}
-                    className="w-full rounded-lg bg-zinc-900/50 border border-zinc-800 px-4 py-3 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                    className={`${inputClass} focus:ring-emerald-500`}
                   />
                 </div>
                 <div className="sm:col-span-2 mt-2">
@@ -259,51 +267,51 @@ export default async function WorkerPage({
             </section>
           )}
 
-          <section className="glass-card rounded-2xl p-6 border border-zinc-800">
+          <section className={`${panelClass} p-6`}>
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+              <h2 className="flex items-center gap-2 text-xl font-semibold text-foreground">
                 <svg className="w-5 h-5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                 </svg>
                 {t(locale, "Recent Activity", "Attività recenti")}
                 </h2>
                 <div className="flex flex-wrap items-center justify-end gap-2">
-                  <Link href="/worker" className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-medium text-zinc-300 hover:bg-zinc-800/70 transition-colors">
+                  <Link href="/worker" className="rounded-lg border border-border bg-background/60 px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
                     {t(locale, "Clear", "Pulisci")}
                   </Link>
-                  <span className="text-xs text-zinc-500">{t(locale, "Showing", "Mostrando")}: {entries.length}</span>
+                  <span className="text-xs text-muted-foreground">{t(locale, "Showing", "Mostrando")}: {entries.length}</span>
                 </div>
             </div>
 
             <form className="mb-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" method="GET">
               <div className="space-y-1.5">
-                <label htmlFor="projectId" className="text-xs font-medium text-zinc-400">{t(locale, "Project", "Progetto")}</label>
+                <label htmlFor="projectId" className="text-xs font-medium text-muted-foreground">{t(locale, "Project", "Progetto")}</label>
                 <select
                   id="projectId"
                   name="projectId"
                   defaultValue={projectIdFilter ?? ""}
-                  className="w-full rounded-lg bg-zinc-900/50 border border-zinc-800 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all appearance-none"
+                  className={`${compactInputClass} appearance-none`}
                 >
-                  <option value="" className="bg-zinc-900">{t(locale, "All projects", "Tutti i progetti")}</option>
+                  <option value="" className="bg-background text-foreground">{t(locale, "All projects", "Tutti i progetti")}</option>
                   {assignedProjects.map((row) => (
-                    <option key={row.project_id} value={row.project_id} className="bg-zinc-900">
+                    <option key={row.project_id} value={row.project_id} className="bg-background text-foreground">
                       {row.projects?.name || row.project_id}
                     </option>
                   ))}
                 </select>
               </div>
               <div className="space-y-1.5">
-                <label htmlFor="from" className="text-xs font-medium text-zinc-400">{t(locale, "From", "Da")}</label>
+                <label htmlFor="from" className="text-xs font-medium text-muted-foreground">{t(locale, "From", "Da")}</label>
                 <input
                   id="from"
                   name="from"
                   type="datetime-local"
                   defaultValue={fromInputValue}
-                  className="w-full rounded-lg bg-zinc-900/50 border border-zinc-800 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all [color-scheme:dark]"
+                  className={compactInputClass}
                 />
               </div>
               <div className="space-y-1.5">
-                <label htmlFor="to" className="text-xs font-medium text-zinc-400">{t(locale, "To", "A")}</label>
+                <label htmlFor="to" className="text-xs font-medium text-muted-foreground">{t(locale, "To", "A")}</label>
                 <input
                   id="to"
                   name="to"
@@ -311,20 +319,20 @@ export default async function WorkerPage({
                   defaultValue={toInputValue}
                   min={fromInputValue || undefined}
                   max={noDateText}
-                  className="w-full rounded-lg bg-zinc-900/50 border border-zinc-800 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all [color-scheme:dark]"
+                  className={compactInputClass}
                 />
               </div>
               <div className="space-y-1.5 lg:items-end flex lg:pt-6">
-                <button className="w-full rounded-lg bg-zinc-800 px-4 py-2 text-xs font-medium text-white transition-all hover:bg-zinc-700 hover:border-zinc-600 border border-zinc-700">
+                <button className="w-full rounded-lg border border-border bg-background/70 px-4 py-2 text-xs font-medium text-foreground transition-all hover:bg-accent hover:text-accent-foreground">
                   {t(locale, "Apply Filters", "Applica filtri")}
                 </button>
               </div>
             </form>
             
-            <div className="overflow-hidden rounded-xl border border-zinc-800/60 bg-zinc-900/20">
+            <div className={tableShellClass}>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left">
-                  <thead className="text-xs text-zinc-400 uppercase bg-zinc-900/50 border-b border-zinc-800">
+                  <thead className={tableHeadClass}>
                     <tr>
                       <th className="px-4 py-3 font-medium">{t(locale, "Project", "Progetto")}</th>
                       <th className="px-4 py-3 font-medium">{t(locale, "Time Window", "Intervallo orario")}</th>
@@ -333,30 +341,30 @@ export default async function WorkerPage({
                       <th className="px-4 py-3 font-medium text-right">{t(locale, "Actions", "Azioni")}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-800/60">
+                  <tbody className="divide-y divide-border/70">
                     {entries.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-8 text-center text-zinc-500">{t(locale, "No time entries recorded yet.", "Nessuna voce di tempo registrata.")}</td>
+                        <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">{t(locale, "No time entries recorded yet.", "Nessuna voce di tempo registrata.")}</td>
                       </tr>
                     ) : (
                       entries.map((entry) => {
                         const isRunning = !entry.ended_at;
                         const canModify = !isRunning;
                         return (
-                          <tr key={entry.id} className={`hover:bg-zinc-800/30 transition-colors ${isRunning ? 'bg-brand-900/10' : ''}`}>
-                            <td className="px-4 py-3 font-medium text-zinc-200">{entry.projects?.name || t(locale, "Unknown", "Sconosciuto")}</td>
+                          <tr key={entry.id} className={`${tableRowClass} ${isRunning ? 'bg-brand-500/10' : ''}`}>
+                            <td className="px-4 py-3 font-medium text-foreground">{entry.projects?.name || t(locale, "Unknown", "Sconosciuto")}</td>
                             <td className="px-4 py-3">
                               <div className="flex flex-col gap-1">
-                                <span className="text-zinc-300">{new Date(entry.started_at).toLocaleTimeString(tag, {hour: '2-digit', minute:'2-digit'})}</span>
-                                <span className="text-xs text-zinc-500">{new Date(entry.started_at).toLocaleDateString(tag)}</span>
-                                <span className="text-zinc-600 text-xs mt-0.5">{t(locale, "to", "a")}</span>
+                                <span className="text-foreground/90">{new Date(entry.started_at).toLocaleTimeString(tag, {hour: '2-digit', minute:'2-digit'})}</span>
+                                <span className="text-xs text-muted-foreground">{new Date(entry.started_at).toLocaleDateString(tag)}</span>
+                                <span className="mt-0.5 text-xs text-muted-foreground/80">{t(locale, "to", "a")}</span>
                                 {isRunning ? (
-                                  <span className="inline-flex items-center gap-1.5 text-brand-400 text-xs font-medium">
+                                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 dark:text-brand-400">
                                     <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse"></span>
                                     {t(locale, "Running Now", "In corso")}
                                   </span>
                                 ) : (
-                                  <span className="text-zinc-400">
+                                  <span className="text-muted-foreground">
                                     {entry.ended_at ? new Date(entry.ended_at).toLocaleTimeString(tag, {hour: '2-digit', minute:'2-digit'}) : "-"}
                                   </span>
                                 )}
@@ -364,25 +372,25 @@ export default async function WorkerPage({
                             </td>
                             <td className="px-4 py-3">
                               <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize ${
-                                entry.source === 'timer' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+                                entry.source === 'timer' ? 'border border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300' : 'border border-purple-500/20 bg-purple-500/10 text-purple-700 dark:text-purple-300'
                               }`}>
                                 {entry.source === "timer" ? t(locale, "timer", "timer") : t(locale, "manual", "manuale")}
                               </span>
                             </td>
-                            <td className="px-4 py-3 text-zinc-400 max-w-xs truncate" title={entry.description || ""}>
-                              {entry.description || <span className="text-zinc-600 italic">{t(locale, "No description", "Nessuna descrizione")}</span>}
+                            <td className="max-w-xs truncate px-4 py-3 text-muted-foreground" title={entry.description || ""}>
+                              {entry.description || <span className="italic text-muted-foreground/80">{t(locale, "No description", "Nessuna descrizione")}</span>}
                             </td>
                               <td className="px-4 py-3">
                                 <div className="flex justify-end gap-2">
                                   {canModify ? (
                                     <Link
                                       href={withBaseFilterParams({ editTimeEntryId: entry.id })}
-                                      className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-800/70"
+                                      className="rounded-md border border-border bg-background/60 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                                     >
                                       {t(locale, "Edit", "Modifica")}
                                     </Link>
                                   ) : (
-                                    <span className="rounded-md border border-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-600">
+                                    <span className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground/70">
                                       {t(locale, "Edit", "Modifica")}
                                     </span>
                                   )}
@@ -390,12 +398,12 @@ export default async function WorkerPage({
                                   {canModify ? (
                                     <Link
                                       href={withBaseFilterParams({ deleteTimeEntryId: entry.id })}
-                                      className="rounded-md border border-red-500/40 px-3 py-1.5 text-xs font-medium text-red-300 transition-colors hover:bg-red-500/10"
+                                      className="rounded-md border border-red-500/40 px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-500/10 dark:text-red-300"
                                     >
                                       {t(locale, "Delete", "Elimina")}
                                     </Link>
                                   ) : (
-                                    <span className="rounded-md border border-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-600">
+                                    <span className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground/70">
                                       {t(locale, "Delete", "Elimina")}
                                     </span>
                                   )}
@@ -413,8 +421,8 @@ export default async function WorkerPage({
         </div>
 
         <div className="lg:col-span-1">
-          <section className="glass-card rounded-2xl p-6 border border-zinc-800 sticky top-6">
-            <h2 className="text-lg font-semibold text-white mb-6 flex items-center gap-2">
+          <section className={`sticky top-6 ${panelClass} p-6`}>
+            <h2 className="mb-6 flex items-center gap-2 text-lg font-semibold text-foreground">
               <svg className="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
               </svg>
@@ -422,11 +430,11 @@ export default async function WorkerPage({
             </h2>
             <form action={createManualTimeEntryAction} className="grid gap-4">
               <div className="space-y-1.5">
-                <label htmlFor="manual-projectId" className="text-sm font-medium text-zinc-300">{t(locale, "Project", "Progetto")}</label>
-                <select id="manual-projectId" name="projectId" required className="w-full rounded-lg bg-zinc-900/50 border border-zinc-800 px-3 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all appearance-none">
-                  <option value="" className="bg-zinc-900">{t(locale, "Select project", "Seleziona progetto")}</option>
+                <label htmlFor="manual-projectId" className="text-sm font-medium text-foreground">{t(locale, "Project", "Progetto")}</label>
+                <select id="manual-projectId" name="projectId" required className={`${compactInputClass} appearance-none focus:ring-amber-500`}>
+                  <option value="" className="bg-background text-foreground">{t(locale, "Select project", "Seleziona progetto")}</option>
                   {assignedProjects.map((row) => (
-                    <option key={row.project_id} value={row.project_id} className="bg-zinc-900">
+                    <option key={row.project_id} value={row.project_id} className="bg-background text-foreground">
                       {row.projects?.name || row.project_id}
                     </option>
                   ))}
@@ -435,27 +443,27 @@ export default async function WorkerPage({
               
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label htmlFor="startedAt" className="text-xs font-medium text-zinc-400">{t(locale, "Start Time", "Ora inizio")}</label>
-                  <input id="startedAt" name="startedAt" type="datetime-local" required className="w-full rounded-lg bg-zinc-900/50 border border-zinc-800 px-2.5 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all [color-scheme:dark]" />
+                  <label htmlFor="startedAt" className="text-xs font-medium text-muted-foreground">{t(locale, "Start Time", "Ora inizio")}</label>
+                   <input id="startedAt" name="startedAt" type="datetime-local" required className={`${compactInputClass} focus:ring-amber-500`} />
                 </div>
                 <div className="space-y-1.5">
-                  <label htmlFor="endedAt" className="text-xs font-medium text-zinc-400">{t(locale, "End Time", "Ora fine")}</label>
-                  <input id="endedAt" name="endedAt" type="datetime-local" required className="w-full rounded-lg bg-zinc-900/50 border border-zinc-800 px-2.5 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all [color-scheme:dark]" />
+                  <label htmlFor="endedAt" className="text-xs font-medium text-muted-foreground">{t(locale, "End Time", "Ora fine")}</label>
+                   <input id="endedAt" name="endedAt" type="datetime-local" required className={`${compactInputClass} focus:ring-amber-500`} />
                 </div>
               </div>
               
               <div className="space-y-1.5">
-                <label htmlFor="manual-description" className="text-sm font-medium text-zinc-300">{t(locale, "Description", "Descrizione")}</label>
+                <label htmlFor="manual-description" className="text-sm font-medium text-foreground">{t(locale, "Description", "Descrizione")}</label>
                 <textarea
                   id="manual-description"
                   name="description"
                   placeholder={t(locale, "What did you do?", "Cosa hai fatto?")}
                   rows={3}
-                  className="w-full rounded-lg bg-zinc-900/50 border border-zinc-800 px-3 py-2 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all resize-none"
+                  className="w-full resize-none rounded-lg border border-input bg-background/75 px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-transparent focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
                 />
               </div>
               
-              <button className="w-full rounded-lg bg-zinc-800 px-4 py-3 font-medium text-white transition-all hover:bg-zinc-700 hover:text-white border border-zinc-700 hover:border-zinc-600 mt-2">
+              <button className="mt-2 w-full rounded-lg border border-border bg-background/70 px-4 py-3 font-medium text-foreground transition-all hover:bg-accent hover:text-accent-foreground">
                 {t(locale, "Log Past Hours", "Registra ore passate")}
               </button>
             </form>
@@ -491,19 +499,19 @@ export default async function WorkerPage({
         )}
 
         {activeDeleteEntry && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-            <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-950 shadow-2xl">
-              <div className="border-b border-zinc-800 px-5 py-4">
-                <h3 className="text-lg font-semibold text-white">{t(locale, "Confirm Deletion", "Conferma eliminazione")}</h3>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl">
+              <div className="border-b border-border px-5 py-4">
+                <h3 className="text-lg font-semibold text-foreground">{t(locale, "Confirm Deletion", "Conferma eliminazione")}</h3>
               </div>
 
               <div className="space-y-4 px-5 py-4">
-                <p className="text-sm text-zinc-300">
-                  {t(locale, "Are you sure you want to delete", "Sei sicuro di voler eliminare")} <span className="font-semibold text-white">{activeDeleteEntry.projects?.name || activeDeleteEntry.project_id}</span>? {t(locale, "This action cannot be undone.", "Questa azione non può essere annullata.")}
+                <p className="text-sm text-muted-foreground">
+                  {t(locale, "Are you sure you want to delete", "Sei sicuro di voler eliminare")} <span className="font-semibold text-foreground">{activeDeleteEntry.projects?.name || activeDeleteEntry.project_id}</span>? {t(locale, "This action cannot be undone.", "Questa azione non può essere annullata.")}
                 </p>
 
                 <div className="flex items-center justify-end gap-2">
-                  <Link href={withBaseFilterParams({})} className="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800/70 transition-colors">
+                  <Link href={withBaseFilterParams({})} className="rounded-lg border border-border bg-background/60 px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
                     {t(locale, "Cancel", "Annulla")}
                   </Link>
                   <form action={deleteTimeEntryAction}>

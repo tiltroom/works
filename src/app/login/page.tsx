@@ -1,5 +1,6 @@
 import { sendMagicLinkAction } from "@/app/actions/auth";
-import { getLocale, t } from "@/lib/i18n";
+import { t } from "@/lib/i18n";
+import { getLocale } from "@/lib/i18n-server";
 
 interface LoginPageProps {
   searchParams?: Promise<{
@@ -17,7 +18,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   if (showWaitingScreen) {
     return (
       <main className="flex min-h-[80vh] flex-col items-center justify-center p-6">
-        <div className="glass-card w-full max-w-md rounded-2xl border border-white/10 p-8 shadow-2xl relative overflow-hidden">
+        <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card/85 p-8 shadow-2xl backdrop-blur-sm">
           <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-brand-600 via-purple-500 to-brand-400"></div>
 
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full border border-brand-400/30 bg-brand-500/10">
@@ -40,7 +41,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             )}
           </p>
 
-          <div className="mt-6 rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-3 text-xs text-zinc-400">
+          <div className="mt-6 rounded-lg border border-border bg-background/55 px-4 py-3 text-xs text-muted-foreground">
             {t(
               locale,
               "Tip: If you don't see the email, check your spam/promotions folder after a few moments.",
@@ -50,7 +51,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
           <a
             href="/login"
-            className="mt-6 inline-flex w-full items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900/50 px-4 py-3 text-sm font-medium text-zinc-200 transition-all hover:border-zinc-600 hover:bg-zinc-800 hover:text-white"
+            className="mt-6 inline-flex w-full items-center justify-center rounded-lg border border-border bg-background/65 px-4 py-3 text-sm font-medium text-foreground transition-all hover:bg-accent hover:text-accent-foreground"
           >
             {t(locale, "Use a different email", "Usa un'email diversa")}
           </a>
@@ -61,7 +62,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
   return (
     <main className="flex min-h-[80vh] flex-col items-center justify-center p-6">
-      <div className="glass-card w-full max-w-md rounded-2xl p-8 border border-white/10 shadow-2xl relative overflow-hidden">
+      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card/85 p-8 shadow-2xl backdrop-blur-sm">
         <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-brand-600 via-purple-500 to-brand-400"></div>
         
         <h1 className="text-3xl font-bold tracking-tight mb-2">{t(locale, "Welcome back", "Bentornato")}</h1>
@@ -77,7 +78,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <div
             role="alert"
             aria-live="polite"
-            className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200"
+            className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-200"
           >
             {errorMessage}
           </div>
@@ -85,7 +86,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
         <form action={sendMagicLinkAction} className="space-y-6">
           <div className="space-y-2">
-            <label htmlFor="email" className="block text-sm font-medium text-zinc-300">
+            <label htmlFor="email" className="block text-sm font-medium text-foreground">
               {t(locale, "Email Address", "Indirizzo email")}
             </label>
             <input
@@ -94,7 +95,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               type="email"
               placeholder={t(locale, "you@example.com", "tuo.nome@esempio.com")}
               required
-              className="w-full rounded-lg bg-zinc-900/50 border border-zinc-800 px-4 py-3 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
+              className="w-full rounded-lg border border-input bg-background/70 px-4 py-3 text-foreground placeholder:text-muted-foreground focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
             />
           </div>
 

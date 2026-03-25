@@ -15,14 +15,14 @@ export function LanguageSwitcher({ locale }: LanguageSwitcherProps) {
   const redirectTo = query ? `${pathname}?${query}` : pathname;
 
   return (
-    <div className="inline-flex items-center rounded-lg border border-zinc-800 bg-zinc-900/70 p-1 text-xs font-semibold uppercase tracking-wider">
+    <div className="inline-flex items-center rounded-lg border border-border bg-card/80 p-1 text-xs font-semibold uppercase tracking-wider shadow-[0_10px_30px_-18px_rgba(15,23,42,0.55)] backdrop-blur-sm">
       <form action={setLocaleAction}>
         <input type="hidden" name="locale" value="en" />
         <input type="hidden" name="redirectTo" value={redirectTo} />
         <button
           type="submit"
           className={`rounded-md px-3 py-1.5 transition-colors ${
-            locale === "en" ? "bg-brand-600 text-white" : "text-zinc-400 hover:text-zinc-200"
+            locale === "en" ? "bg-brand-600 text-white" : "text-muted-foreground hover:bg-secondary hover:text-foreground"
           }`}
           aria-label="Switch language to English"
         >
@@ -36,7 +36,7 @@ export function LanguageSwitcher({ locale }: LanguageSwitcherProps) {
         <button
           type="submit"
           className={`rounded-md px-3 py-1.5 transition-colors ${
-            locale === "it" ? "bg-brand-600 text-white" : "text-zinc-400 hover:text-zinc-200"
+            locale === "it" ? "bg-brand-600 text-white" : "text-muted-foreground hover:bg-secondary hover:text-foreground"
           }`}
           aria-label="Passa la lingua in italiano"
         >
