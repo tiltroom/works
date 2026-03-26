@@ -1,14 +1,18 @@
-import { createProjectAction, deleteProjectAction, updateProjectAction } from "@/app/actions/projects";
+import { adjustProjectHoursAction, createProjectAction, deleteProjectAction, updateProjectAction } from "@/app/actions/projects";
 import { deleteInvitationAction, inviteUserAction } from "@/app/actions/invitations";
 import { deletePlatformUserAction, updateCustomerHourlyRateAction, updatePlatformUserAction } from "@/app/actions/admin-users";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { LogoutButton } from "@/components/logout-button";
+import { QueryToast } from "@/components/ui/query-toast";
+import { ModalActionForm } from "@/components/ui/modal-action-form";
 import { ViewportModal, ViewportModalPanel } from "@/components/ui/viewport-modal";
 import Link from "next/link";
-import { t } from "@/lib/i18n";
+import type { ReactNode } from "react";
+import { localeTag, t } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n-server";
+import type { QueryToastVariant } from "@/lib/query-toast";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +45,27 @@ type ProjectTimeRow = {
   project_id: string;
   started_at: string;
   ended_at: string | null;
+};
+
+type AdminProjectRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  assigned_hours: number;
+  customer_id: string;
+  profiles: { full_name?: string } | null;
+  project_workers: ProjectWorkerAssignment[] | null;
+};
+
+type AdminProjectTransactionRow = {
+  id: string;
+  project_id: string;
+  hours_added: number;
+  amount_cents: number | null;
+  currency: string | null;
+  payment_method: "stripe" | "manual";
+  admin_comment: string | null;
+  created_at: string;
 };
 
 function tabStyles(isActive: boolean) {
@@ -89,12 +114,17 @@ function formatAssignedWorkerNames(
   return names.length > 0 ? names.join(", ") : "—";
 }
 
+function ActionIcon({ children }: { children: ReactNode }) {
+  return <span className="h-4 w-4">{children}</span>;
+}
+
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ tab?: string; editProjectId?: string; deleteProjectId?: string; deleteInvitationId?: string; deleteUserId?: string; editUserId?: string }> | { tab?: string; editProjectId?: string; deleteProjectId?: string; deleteInvitationId?: string; deleteUserId?: string; editUserId?: string };
+  searchParams?: Promise<{ tab?: string; editProjectId?: string; deleteProjectId?: string; adjustProjectHoursId?: string; viewTransactionsId?: string; deleteInvitationId?: string; deleteUserId?: string; editUserId?: string; toast?: string; toastMessage?: string }> | { tab?: string; editProjectId?: string; deleteProjectId?: string; adjustProjectHoursId?: string; viewTransactionsId?: string; deleteInvitationId?: string; deleteUserId?: string; editUserId?: string; toast?: string; toastMessage?: string };
 }) {
   const locale = await getLocale();
+  const tag = localeTag(locale);
   await requireRole(["admin"]);
   const supabase = await createClient();
   const adminClient = createAdminClient();
@@ -103,12 +133,19 @@ export default async function AdminPage({
   const tabParam = params.tab;
   const editProjectIdParam = params.editProjectId;
   const deleteProjectIdParam = params.deleteProjectId;
+  const adjustProjectHoursIdParam = params.adjustProjectHoursId;
+  const viewTransactionsIdParam = params.viewTransactionsId;
   const deleteInvitationIdParam = params.deleteInvitationId;
   const deleteUserIdParam = params.deleteUserId;
   const editUserIdParam = params.editUserId;
+  const toastTypeParam = params.toast?.trim();
+  const toastMessageParam = params.toastMessage?.trim();
   const activeTab: AdminTab = tabParam === "projects" || tabParam === "users" ? tabParam : "overview";
+  const activeToast = (toastTypeParam === "success" || toastTypeParam === "error") && toastMessageParam
+    ? { variant: toastTypeParam as QueryToastVariant, message: toastMessageParam }
+    : null;
 
-  const [{ data: customerProfiles }, { data: customerRates, error: customerRatesError }, { data: workers }, { data: admins }, { data: projects }, { data: projectTimeEntries }, { data: invitations }, { data: authUsersData, error: authUsersError }] = await Promise.all([
+  const [{ data: customerProfiles }, { data: customerRates, error: customerRatesError }, { data: workers }, { data: admins }, { data: projects }, { data: projectTimeEntries }, { data: hourPurchases }, { data: invitations }, { data: authUsersData, error: authUsersError }] = await Promise.all([
     supabase.from("profiles").select("id,full_name,role").eq("role", "customer"),
     supabase.from("profiles").select("id,custom_hourly_rate_cents").eq("role", "customer"),
     supabase.from("profiles").select("id,full_name,role").eq("role", "worker"),
@@ -117,6 +154,7 @@ export default async function AdminPage({
       .from("projects")
       .select("id,name,description,assigned_hours,customer_id,profiles!projects_customer_id_fkey(full_name),project_workers(worker_id)"),
     supabase.from("time_entries").select("project_id,started_at,ended_at"),
+    supabase.from("hour_purchases").select("id,project_id,hours_added,amount_cents,currency,payment_method,admin_comment,created_at").order("created_at", { ascending: false }),
     supabase
       .from("invitations")
       .select("id,email,role,full_name,created_at,accepted_at")
@@ -183,15 +221,26 @@ export default async function AdminPage({
   }, new Map());
   const editingProject = (projects ?? []).find((project) => project.id === editProjectIdParam) ?? null;
   const deletingProject = (projects ?? []).find((project) => project.id === deleteProjectIdParam) ?? null;
+  const adjustingProjectHours = ((projects ?? []) as AdminProjectRow[]).find((project) => project.id === adjustProjectHoursIdParam) ?? null;
+  const viewingProjectTransactions = ((projects ?? []) as AdminProjectRow[]).find((project) => project.id === viewTransactionsIdParam) ?? null;
   const deletingInvitation = pendingInvitations.find((invitation) => invitation.id === deleteInvitationIdParam) ?? null;
   const deletingUser = allUsers.find((user) => user.id === deleteUserIdParam) ?? null;
   const editingUser = allUsers.find((user) => user.id === editUserIdParam) ?? null;
   const editingProjectWorkerIds = editingProject
     ? ((editingProject.project_workers as ProjectWorkerAssignment[] | null) ?? []).map((assignment) => assignment.worker_id)
     : [];
+  const projectTransactions = (((hourPurchases ?? []) as AdminProjectTransactionRow[]).filter((purchase) => purchase.project_id === viewingProjectTransactions?.id));
 
   return (
     <main className="w-full">
+      {activeToast && (
+        <QueryToast
+          variant={activeToast.variant}
+          message={activeToast.message}
+          closeLabel={t(locale, "Close", "Chiudi")}
+        />
+      )}
+
       <header className="mb-8 flex flex-col justify-between gap-4 border-b border-border/70 pb-6 sm:flex-row sm:items-center">
         <div>
           <h1 className="flex items-center gap-3 text-3xl font-bold tracking-tight text-foreground">
@@ -427,19 +476,55 @@ export default async function AdminPage({
                           <td className="px-4 py-3">
                             <div className="flex items-center justify-end gap-2">
                               <Link
-                                href={`/admin?tab=projects&editProjectId=${project.id}`}
-                                className="rounded-md border border-border bg-background/60 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                                href={`/admin?tab=projects&viewTransactionsId=${project.id}`}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-blue-500/30 bg-blue-500/10 text-blue-700 transition-colors hover:bg-blue-500/20 dark:text-blue-300"
+                                aria-label={t(locale, "Transactions history", "Storico transazioni")}
+                                title={t(locale, "Transactions history", "Storico transazioni")}
                               >
-                                 {t(locale, "Edit", "Modifica")}
-                               </Link>
+                                <ActionIcon>
+                                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" className="h-4 w-4">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h8M8 12h8m-8 5h8M5 7h.01M5 12h.01M5 17h.01" />
+                                  </svg>
+                                </ActionIcon>
+                              </Link>
+                              <Link
+                                href={`/admin?tab=projects&adjustProjectHoursId=${project.id}`}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-brand-500/30 bg-brand-500/10 text-brand-700 transition-colors hover:bg-brand-500/20 dark:text-brand-300"
+                                aria-label={t(locale, "Adjust hours", "Regola ore")}
+                                title={t(locale, "Adjust hours", "Regola ore")}
+                              >
+                                <ActionIcon>
+                                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" className="h-4 w-4">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v12m6-6H6" />
+                                  </svg>
+                                </ActionIcon>
+                              </Link>
+                              <Link
+                                href={`/admin?tab=projects&editProjectId=${project.id}`}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background/60 text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                                aria-label={t(locale, "Edit", "Modifica")}
+                                title={t(locale, "Edit", "Modifica")}
+                              >
+                                <ActionIcon>
+                                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" className="h-4 w-4">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                  </svg>
+                                </ActionIcon>
+                              </Link>
                               <Link
                                 href={`/admin?tab=projects&deleteProjectId=${project.id}`}
-                                className="rounded-md border border-red-500/40 px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-500/10 dark:text-red-300"
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-red-500/40 text-red-700 transition-colors hover:bg-red-500/10 dark:text-red-300"
+                                aria-label={t(locale, "Delete", "Elimina")}
+                                title={t(locale, "Delete", "Elimina")}
                               >
-                                 {t(locale, "Delete", "Elimina")}
-                                </Link>
-                             </div>
-                           </td>
+                                <ActionIcon>
+                                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" className="h-4 w-4">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3m-7 0h8" />
+                                  </svg>
+                                </ActionIcon>
+                              </Link>
+                              </div>
+                            </td>
                         </tr>
                        ))
                      )}
@@ -458,7 +543,14 @@ export default async function AdminPage({
                     </Link>
                   </div>
 
-                  <form action={updateProjectAction} className="grid gap-4 p-5 md:grid-cols-2">
+                  <ModalActionForm
+                    action={updateProjectAction}
+                    className="grid gap-4 p-5 md:grid-cols-2"
+                    successRedirectHref="/admin?tab=projects"
+                    successMessage={t(locale, "Project updated successfully", "Progetto aggiornato con successo")}
+                    closeLabel={t(locale, "Close", "Chiudi")}
+                    genericErrorMessage={t(locale, "An error occurred while updating the project.", "Si è verificato un errore durante l'aggiornamento del progetto.")}
+                  >
                     <input type="hidden" name="projectId" value={editingProject.id} />
 
                     <div className="space-y-1.5 md:col-span-2">
@@ -521,12 +613,12 @@ export default async function AdminPage({
                     <div className="md:col-span-2 flex items-center justify-end gap-2">
                       <Link href="/admin?tab=projects" className="rounded-lg border border-border bg-background/60 px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
                          {t(locale, "Cancel", "Annulla")}
-                       </Link>
+                        </Link>
                       <button type="submit" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-500 transition-colors">
                          {t(locale, "Save Changes", "Salva modifiche")}
-                       </button>
+                        </button>
                     </div>
-                  </form>
+                  </ModalActionForm>
                 </ViewportModalPanel>
               </ViewportModal>
             )}
@@ -547,12 +639,157 @@ export default async function AdminPage({
                       <Link href="/admin?tab=projects" className="rounded-lg border border-border bg-background/60 px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
                          {t(locale, "Cancel", "Annulla")}
                        </Link>
-                      <form action={deleteProjectAction}>
+                      <ModalActionForm
+                        action={deleteProjectAction}
+                        successRedirectHref="/admin?tab=projects"
+                        successMessage={t(locale, "Project deleted successfully", "Progetto eliminato con successo")}
+                        closeLabel={t(locale, "Close", "Chiudi")}
+                        genericErrorMessage={t(locale, "An error occurred while deleting the project.", "Si è verificato un errore durante l'eliminazione del progetto.")}
+                      >
                         <input type="hidden" name="projectId" value={deletingProject.id} />
                         <button type="submit" className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 transition-colors">
                            {t(locale, "Delete Project", "Elimina progetto")}
-                         </button>
-                       </form>
+                          </button>
+                        </ModalActionForm>
+                     </div>
+                   </div>
+                 </ViewportModalPanel>
+              </ViewportModal>
+            )}
+
+            {adjustingProjectHours && (
+              <ViewportModal>
+                <ViewportModalPanel className="max-w-lg">
+                  <div className="flex items-center justify-between border-b border-border px-5 py-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-foreground">{t(locale, "Adjust Project Hours", "Regola ore progetto")}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {adjustingProjectHours.name}
+                      </p>
+                    </div>
+                    <Link href="/admin?tab=projects" className="rounded-md border border-border bg-background/60 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
+                      {t(locale, "Close", "Chiudi")}
+                    </Link>
+                  </div>
+
+                  <ModalActionForm
+                    action={adjustProjectHoursAction}
+                    className="grid gap-4 p-5"
+                    successRedirectHref="/admin?tab=projects"
+                    successMessage={t(locale, "Project hours adjusted successfully", "Ore progetto regolate con successo")}
+                    closeLabel={t(locale, "Close", "Chiudi")}
+                    genericErrorMessage={t(locale, "An error occurred while adjusting project hours.", "Si è verificato un errore durante la regolazione delle ore del progetto.")}
+                  >
+                    <input type="hidden" name="projectId" value={adjustingProjectHours.id} />
+                    <input type="hidden" name="customerId" value={adjustingProjectHours.customer_id} />
+
+                    <div className="rounded-xl border border-brand-500/20 bg-brand-500/10 px-4 py-3 text-sm text-brand-800 dark:text-brand-200">
+                      {t(locale, "Positive values add hours. Negative values subtract hours. The entry will be saved as a manual customer purchase.", "I valori positivi aggiungono ore. I valori negativi sottraggono ore. La voce sarà salvata come acquisto cliente manuale.")}
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label htmlFor="adjust-hours-delta" className="text-sm font-medium text-foreground">{t(locale, "Hours Adjustment", "Regolazione ore")}</label>
+                      <input
+                        id="adjust-hours-delta"
+                        name="hoursDelta"
+                        type="number"
+                        step="0.25"
+                        required
+                        placeholder={t(locale, "Use positive or negative values", "Usa valori positivi o negativi")}
+                        className={inputClass}
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label htmlFor="adjust-hours-comment" className="text-sm font-medium text-foreground">{t(locale, "Comment", "Commento")}</label>
+                      <textarea
+                        id="adjust-hours-comment"
+                        name="adminComment"
+                        rows={4}
+                        required
+                        placeholder={t(locale, "Why are you adjusting this project's hours?", "Perché stai regolando le ore di questo progetto?")}
+                        className="w-full resize-none rounded-lg border border-input bg-background/75 px-4 py-2.5 text-foreground placeholder:text-muted-foreground focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2">
+                      <Link href="/admin?tab=projects" className="rounded-lg border border-border bg-background/60 px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
+                        {t(locale, "Cancel", "Annulla")}
+                      </Link>
+                      <button type="submit" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-500 transition-colors">
+                        {t(locale, "Save Adjustment", "Salva regolazione")}
+                      </button>
+                    </div>
+                  </ModalActionForm>
+                </ViewportModalPanel>
+              </ViewportModal>
+            )}
+
+            {viewingProjectTransactions && (
+              <ViewportModal>
+                <ViewportModalPanel className="max-w-5xl">
+                  <div className="flex items-center justify-between border-b border-border px-5 py-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-foreground">{t(locale, "Transactions History", "Storico transazioni")}</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">{viewingProjectTransactions.name}</p>
+                    </div>
+                    <Link href="/admin?tab=projects" className="rounded-md border border-border bg-background/60 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
+                      {t(locale, "Close", "Chiudi")}
+                    </Link>
+                  </div>
+
+                  <div className="p-5">
+                    <div className={tableShellClass}>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                          <thead className={tableHeadClass}>
+                            <tr>
+                              <th className="px-4 py-3 font-medium">{t(locale, "Hours Added", "Ore aggiunte")}</th>
+                              <th className="px-4 py-3 font-medium">{t(locale, "Method", "Metodo")}</th>
+                              <th className="px-4 py-3 font-medium">{t(locale, "Amount Paid", "Importo pagato")}</th>
+                              <th className="px-4 py-3 font-medium">{t(locale, "Comment", "Commento")}</th>
+                              <th className="px-4 py-3 font-medium">{t(locale, "Date", "Data")}</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border/70">
+                            {projectTransactions.length === 0 ? (
+                              <tr>
+                                <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">{t(locale, "No transactions found.", "Nessuna transazione trovata.")}</td>
+                              </tr>
+                            ) : (
+                              projectTransactions.map((purchase) => {
+                                const methodLabel = purchase.payment_method === "manual"
+                                  ? t(locale, "Manual", "Manuale")
+                                  : t(locale, "Stripe", "Stripe");
+                                const amountLabel = purchase.payment_method === "manual" || purchase.amount_cents == null || !purchase.currency
+                                  ? "—"
+                                  : `${(purchase.amount_cents / 100).toFixed(2)} ${purchase.currency.toUpperCase()}`;
+                                const isPositiveAdjustment = Number(purchase.hours_added) > 0;
+
+                                return (
+                                  <tr key={purchase.id} className={tableRowClass}>
+                                    <td className="px-4 py-3">
+                                      <span className={`inline-flex items-center rounded border px-2 py-0.5 text-xs font-medium ${isPositiveAdjustment ? "border-green-500/20 bg-green-500/10 text-green-700 dark:text-green-300" : "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}>
+                                        {Number(purchase.hours_added) > 0 ? "+" : ""}{Number(purchase.hours_added).toFixed(2)}h
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-muted-foreground">{methodLabel}</td>
+                                    <td className="px-4 py-3 font-mono text-foreground">{amountLabel}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{purchase.admin_comment || "—"}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{new Date(purchase.created_at).toLocaleString(tag)}</td>
+                                  </tr>
+                                );
+                              })
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex justify-end">
+                      <Link href="/admin?tab=projects" className="rounded-lg border border-border bg-background/60 px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
+                        {t(locale, "Close", "Chiudi")}
+                      </Link>
                     </div>
                   </div>
                 </ViewportModalPanel>
@@ -778,7 +1015,14 @@ export default async function AdminPage({
                     </Link>
                   </div>
 
-                  <form action={updatePlatformUserAction} className="grid gap-4 p-5 md:grid-cols-2">
+                  <ModalActionForm
+                    action={updatePlatformUserAction}
+                    className="grid gap-4 p-5 md:grid-cols-2"
+                    successRedirectHref="/admin?tab=users"
+                    successMessage={t(locale, "User updated successfully", "Utente aggiornato con successo")}
+                    closeLabel={t(locale, "Close", "Chiudi")}
+                    genericErrorMessage={t(locale, "An error occurred while updating the user.", "Si è verificato un errore durante l'aggiornamento dell'utente.")}
+                  >
                     <input type="hidden" name="userId" value={editingUser.id} />
 
                     <div className="space-y-1.5 md:col-span-2">
@@ -817,7 +1061,7 @@ export default async function AdminPage({
                         {t(locale, "Save Changes", "Salva modifiche")}
                       </button>
                     </div>
-                  </form>
+                  </ModalActionForm>
                 </ViewportModalPanel>
               </ViewportModal>
             )}
@@ -843,15 +1087,21 @@ export default async function AdminPage({
                       <Link href="/admin?tab=users" className="rounded-lg border border-border bg-background/60 px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
                         {t(locale, "Cancel", "Annulla")}
                       </Link>
-                      <form action={deletePlatformUserAction}>
+                      <ModalActionForm
+                        action={deletePlatformUserAction}
+                        successRedirectHref="/admin?tab=users"
+                        successMessage={t(locale, "User deleted successfully", "Utente eliminato con successo")}
+                        closeLabel={t(locale, "Close", "Chiudi")}
+                        genericErrorMessage={t(locale, "An error occurred while deleting the user.", "Si è verificato un errore durante l'eliminazione dell'utente.")}
+                      >
                         <input type="hidden" name="userId" value={deletingUser.id} />
                         <button type="submit" className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 transition-colors">
                           {t(locale, "Delete User", "Elimina utente")}
                         </button>
-                      </form>
-                    </div>
-                  </div>
-                </ViewportModalPanel>
+                      </ModalActionForm>
+                     </div>
+                   </div>
+                 </ViewportModalPanel>
               </ViewportModal>
             )}
           </section>
@@ -943,15 +1193,21 @@ export default async function AdminPage({
                       <Link href="/admin?tab=users" className="rounded-lg border border-border bg-background/60 px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
                         {t(locale, "Cancel", "Annulla")}
                       </Link>
-                      <form action={deleteInvitationAction}>
+                      <ModalActionForm
+                        action={deleteInvitationAction}
+                        successRedirectHref="/admin?tab=users"
+                        successMessage={t(locale, "Invitation deleted successfully", "Invito eliminato con successo")}
+                        closeLabel={t(locale, "Close", "Chiudi")}
+                        genericErrorMessage={t(locale, "An error occurred while deleting the invitation.", "Si è verificato un errore durante l'eliminazione dell'invito.")}
+                      >
                         <input type="hidden" name="invitationId" value={deletingInvitation.id} />
                         <button type="submit" className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 transition-colors">
                           {t(locale, "Delete User", "Elimina utente")}
                         </button>
-                      </form>
-                    </div>
-                  </div>
-                </ViewportModalPanel>
+                      </ModalActionForm>
+                     </div>
+                   </div>
+                 </ViewportModalPanel>
               </ViewportModal>
             )}
           </section>

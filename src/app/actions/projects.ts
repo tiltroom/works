@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth";
 import { t } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n-server";
@@ -152,4 +153,59 @@ export async function deleteProjectAction(formData: FormData) {
   }
 
   revalidatePath("/admin");
+}
+
+export async function adjustProjectHoursAction(formData: FormData) {
+  const locale = await getLocale();
+  await requireRole(["admin"]);
+
+  const projectId = String(formData.get("projectId") ?? "").trim();
+  const customerId = String(formData.get("customerId") ?? "").trim();
+  const hoursDelta = Number(formData.get("hoursDelta") ?? "0");
+  const adminComment = String(formData.get("adminComment") ?? "").trim();
+
+  if (!projectId || !customerId || Number.isNaN(hoursDelta) || hoursDelta === 0 || !adminComment) {
+    throw new Error(t(locale, "Invalid project adjustment payload", "Payload regolazione progetto non valido"));
+  }
+
+  const admin = createAdminClient();
+  const { data: project, error: projectError } = await admin
+    .from("projects")
+    .select("id,customer_id")
+    .eq("id", projectId)
+    .maybeSingle();
+
+  if (projectError) {
+    throw new Error(projectError.message);
+  }
+
+  if (!project || project.customer_id !== customerId) {
+    throw new Error(t(locale, "Project not found", "Progetto non trovato"));
+  }
+
+  const { error: adjustmentError } = await admin.rpc("apply_manual_hour_adjustment", {
+    p_project_id: projectId,
+    p_customer_id: customerId,
+    p_hours_added: hoursDelta,
+    p_admin_comment: adminComment,
+  });
+
+  if (adjustmentError) {
+    if (adjustmentError.message.includes("project_hours_negative")) {
+      throw new Error(t(locale, "This adjustment would reduce project hours below zero", "Questa regolazione porterebbe le ore del progetto sotto zero"));
+    }
+
+    if (adjustmentError.message.includes("project_customer_mismatch")) {
+      throw new Error(t(locale, "Project not found", "Progetto non trovato"));
+    }
+
+    if (adjustmentError.message.includes("invalid_hours_adjustment")) {
+      throw new Error(t(locale, "Adjustment must be different from zero", "La regolazione deve essere diversa da zero"));
+    }
+
+    throw new Error(adjustmentError.message);
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/customer");
 }

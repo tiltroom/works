@@ -33,8 +33,10 @@ interface PurchaseRow {
   id: string;
   project_id: string;
   hours_added: number;
-  amount_cents: number;
-  currency: string;
+  amount_cents: number | null;
+  currency: string | null;
+  payment_method: "stripe" | "manual";
+  admin_comment: string | null;
   created_at: string;
 }
 
@@ -92,7 +94,7 @@ export default async function CustomerPage() {
     supabase.from("projects").select("id,name,assigned_hours").eq("customer_id", profile.id),
     supabase
       .from("hour_purchases")
-      .select("id,project_id,hours_added,amount_cents,currency,created_at")
+      .select("id,project_id,hours_added,amount_cents,currency,payment_method,admin_comment,created_at")
       .eq("customer_id", profile.id),
   ]);
 
@@ -305,29 +307,41 @@ export default async function CustomerPage() {
                   <tr>
                       <th className="px-4 py-3 font-medium">{t(locale, "Project", "Progetto")}</th>
                       <th className="px-4 py-3 font-medium">{t(locale, "Hours Added", "Ore aggiunte")}</th>
+                      <th className="px-4 py-3 font-medium">{t(locale, "Method", "Metodo")}</th>
                       <th className="px-4 py-3 font-medium">{t(locale, "Amount Paid", "Importo pagato")}</th>
+                      <th className="px-4 py-3 font-medium">{t(locale, "Comment", "Commento")}</th>
                       <th className="px-4 py-3 font-medium">{t(locale, "Date", "Data")}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/70">
                     {billingRows.length === 0 ? (
                       <tr>
-                        <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">{t(locale, "No purchases found.", "Nessun acquisto trovato.")}</td>
+                        <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">{t(locale, "No purchases found.", "Nessun acquisto trovato.")}</td>
                       </tr>
                     ) : (
                       billingRows.map((purchase) => {
                         const projectName = customerProjects.find((project) => project.id === purchase.project_id)?.name ?? t(locale, "Unknown", "Sconosciuto");
+                        const methodLabel = purchase.payment_method === "manual"
+                          ? t(locale, "Manual", "Manuale")
+                          : t(locale, "Stripe", "Stripe");
+                        const amountLabel = purchase.payment_method === "manual" || purchase.amount_cents == null || !purchase.currency
+                          ? "—"
+                          : `${(purchase.amount_cents / 100).toFixed(2)} ${purchase.currency.toUpperCase()}`;
+                        const isPositiveAdjustment = Number(purchase.hours_added) > 0;
+
                         return (
                         <tr key={purchase.id} className={tableRowClass}>
                           <td className="px-4 py-3 font-medium text-foreground">{projectName}</td>
                           <td className="px-4 py-3">
-                            <span className="inline-flex items-center rounded border border-green-500/20 bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-300">
-                              +{Number(purchase.hours_added).toFixed(2)}h
+                            <span className={`inline-flex items-center rounded border px-2 py-0.5 text-xs font-medium ${isPositiveAdjustment ? "border-green-500/20 bg-green-500/10 text-green-700 dark:text-green-300" : "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}>
+                              {Number(purchase.hours_added) > 0 ? "+" : ""}{Number(purchase.hours_added).toFixed(2)}h
                             </span>
                           </td>
+                          <td className="px-4 py-3 text-muted-foreground">{methodLabel}</td>
                           <td className="px-4 py-3 font-mono text-foreground">
-                            {(purchase.amount_cents / 100).toFixed(2)} <span className="ml-1 text-muted-foreground">{purchase.currency.toUpperCase()}</span>
+                            {amountLabel}
                           </td>
+                          <td className="px-4 py-3 text-muted-foreground">{purchase.admin_comment || "—"}</td>
                           <td className="px-4 py-3 text-muted-foreground">{new Date(purchase.created_at).toLocaleString(tag)}</td>
                         </tr>
                       );

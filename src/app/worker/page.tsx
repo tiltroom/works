@@ -1,6 +1,7 @@
 import { createManualTimeEntryAction, deleteTimeEntryAction, startTimerAction, stopTimerAction, updateTimeEntryAction } from "@/app/actions/time-entries";
 import { EditTimeEntryModal } from "@/components/worker/edit-time-entry-modal";
 import { WorkerQueryToast } from "@/components/worker/worker-query-toast";
+import { ModalActionForm } from "@/components/ui/modal-action-form";
 import { LogoutButton } from "@/components/logout-button";
 import Link from "next/link";
 import { TimerCard } from "@/components/worker/timer-card";
@@ -515,12 +516,18 @@ export default async function WorkerPage({
                   <Link href={withBaseFilterParams({})} className="rounded-lg border border-border bg-background/60 px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
                     {t(locale, "Cancel", "Annulla")}
                   </Link>
-                  <form action={deleteTimeEntryAction}>
+                  <ModalActionForm
+                    action={deleteTimeEntryAction}
+                    successRedirectHref={withBaseFilterParams({})}
+                    successMessage={t(locale, "Time entry deleted successfully", "Voce tempo eliminata con successo")}
+                    closeLabel={t(locale, "Close", "Chiudi")}
+                    genericErrorMessage={t(locale, "An error occurred while deleting the time entry.", "Si è verificato un errore durante l'eliminazione della voce tempo.")}
+                  >
                     <input type="hidden" name="timeEntryId" value={activeDeleteEntry.id} />
                     <button type="submit" className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 transition-colors">
                       {t(locale, "Delete", "Elimina")}
                     </button>
-                  </form>
+                  </ModalActionForm>
                 </div>
               </div>
             </ViewportModalPanel>

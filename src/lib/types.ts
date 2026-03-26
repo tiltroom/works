@@ -36,8 +36,10 @@ export interface HourPurchase {
   project_id: string;
   customer_id: string;
   hours_added: number;
-  stripe_checkout_session_id: string;
-  amount_cents: number;
-  currency: string;
+  stripe_checkout_session_id: string | null;
+  amount_cents: number | null;
+  currency: string | null;
+  payment_method: "stripe" | "manual";
+  admin_comment: string | null;
   created_at: string;
 }
