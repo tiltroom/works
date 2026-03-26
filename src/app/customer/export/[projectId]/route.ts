@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 
 import { createClient } from "@/lib/supabase/server";
+import { loggedMinutesBetween } from "@/lib/time";
 
 interface ProjectRow {
   id: string;
@@ -47,10 +48,7 @@ function formatDurationMinutes(startedAt: string, endedAt: string | null) {
     return "Running";
   }
 
-  const totalMinutes = Math.max(
-    Math.round((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 60_000),
-    0,
-  );
+  const totalMinutes = loggedMinutesBetween(startedAt, endedAt);
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
 

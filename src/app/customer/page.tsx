@@ -1,6 +1,6 @@
 import { createCheckoutForHoursAction } from "@/app/actions/billing";
 import { LogoutButton } from "@/components/logout-button";
-import { hoursToMinutesWithHoursDisplay, millisecondsToHours } from "@/lib/time";
+import { hoursToMinutesWithHoursDisplay, loggedHoursBetween } from "@/lib/time";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { localeTag, t } from "@/lib/i18n";
@@ -45,8 +45,8 @@ function totalUsedHours(entries: ProjectTimeRow[]) {
     if (!entry.ended_at) {
       return total;
     }
-    const ms = new Date(entry.ended_at).getTime() - new Date(entry.started_at).getTime();
-    return total + millisecondsToHours(Math.max(ms, 0));
+
+    return total + loggedHoursBetween(entry.started_at, entry.ended_at);
   }, 0);
 }
 
@@ -55,26 +55,9 @@ function formatEntryDuration(locale: "en" | "it", startedAt: string, endedAt: st
     return t(locale, "Running", "In corso");
   }
 
-  const totalMinutes = Math.max(
-    Math.round((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 60_000),
-    0,
-  );
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
+  const totalHours = loggedHoursBetween(startedAt, endedAt);
 
-  if (hours > 0 && minutes > 0) {
-    return t(locale, `${hours}h ${minutes}m`, `${hours}h ${minutes} min`);
-  }
-
-  if (hours > 0) {
-    return t(locale, `${hours}h`, `${hours}h`);
-  }
-
-  if (minutes > 0) {
-    return t(locale, `${minutes}m`, `${minutes} min`);
-  }
-
-  return t(locale, "< 1m", "< 1 min");
+  return hoursToMinutesWithHoursDisplay(totalHours);
 }
 
 const sectionCardClass = "rounded-2xl border border-border bg-card/80 backdrop-blur-sm";

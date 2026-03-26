@@ -13,6 +13,7 @@ import type { ReactNode } from "react";
 import { localeTag, t } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n-server";
 import type { QueryToastVariant } from "@/lib/query-toast";
+import { loggedHoursBetween } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -96,10 +97,7 @@ function totalUsedHours(entries: ProjectTimeRow[]) {
     if (!entry.ended_at) {
       return total;
     }
-
-    const milliseconds = new Date(entry.ended_at).getTime() - new Date(entry.started_at).getTime();
-
-    return total + Math.max(milliseconds, 0) / 3_600_000;
+    return total + loggedHoursBetween(entry.started_at, entry.ended_at);
   }, 0);
 }
 
