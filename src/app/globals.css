@@ -172,6 +172,186 @@
   }
 }
 
+.home-hero__backdrop {
+  background:
+    radial-gradient(circle at top, color-mix(in srgb, var(--color-brand-500) 18%, transparent) 0%, transparent 48%),
+    radial-gradient(circle at 18% 18%, color-mix(in srgb, white 74%, var(--color-brand-100) 26%) 0%, transparent 34%),
+    radial-gradient(circle at 82% 20%, color-mix(in srgb, white 76%, #f5d0fe 24%) 0%, transparent 30%),
+    linear-gradient(180deg, color-mix(in srgb, white 88%, var(--background) 12%) 0%, var(--background) 62%, color-mix(in srgb, var(--background) 92%, var(--color-brand-50) 8%) 100%);
+}
+
+.home-hero__grid {
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--border) 34%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--border) 28%, transparent) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: radial-gradient(circle at center, black 38%, transparent 88%);
+}
+
+.home-hero__card {
+  background:
+    linear-gradient(160deg, color-mix(in srgb, white 92%, var(--color-brand-50) 8%) 0%, color-mix(in srgb, white 82%, var(--background) 18%) 54%, color-mix(in srgb, white 76%, var(--color-brand-100) 24%) 100%);
+  border-color: color-mix(in srgb, var(--border) 72%, white 28%);
+  box-shadow:
+    0 26px 70px -34px rgba(15, 23, 42, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    inset 0 -1px 0 rgba(99, 102, 241, 0.06);
+}
+
+.home-hero__shine {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.95), transparent);
+}
+
+.home-hero__accent {
+  filter: blur(56px);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.home-hero__accent--primary {
+  background: color-mix(in srgb, var(--color-brand-400) 82%, white 18%);
+}
+
+.home-hero__accent--secondary {
+  background: color-mix(in srgb, #f0abfc 64%, var(--color-brand-200) 36%);
+}
+
+.home-hero__cta {
+  border: 1px solid color-mix(in srgb, var(--color-brand-400) 32%, transparent);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--color-brand-700) 88%, black 12%) 0%, var(--color-brand-600) 44%, color-mix(in srgb, var(--color-brand-500) 80%, white 20%) 100%);
+  box-shadow:
+    0 22px 40px -24px rgba(79, 70, 229, 0.62),
+    0 0 0 1px rgba(255, 255, 255, 0.14) inset;
+}
+
+.home-hero__cta:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 28px 48px -24px rgba(79, 70, 229, 0.72),
+    0 0 0 1px rgba(255, 255, 255, 0.18) inset;
+}
+
+.home-hero__chip {
+  border-color: color-mix(in srgb, var(--border) 76%, white 24%);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, white 86%, var(--background) 14%) 0%, color-mix(in srgb, white 74%, var(--secondary) 26%) 100%);
+  color: color-mix(in srgb, var(--foreground) 68%, var(--muted-foreground) 32%);
+  box-shadow:
+    0 18px 32px -28px rgba(15, 23, 42, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+:root[data-theme="dark"] .home-hero__backdrop {
+  background:
+    radial-gradient(circle at top, color-mix(in srgb, var(--color-brand-900) 58%, transparent) 0%, transparent 48%),
+    radial-gradient(circle at 18% 18%, color-mix(in srgb, var(--color-brand-600) 24%, transparent) 0%, transparent 30%),
+    radial-gradient(circle at 82% 20%, rgba(168, 85, 247, 0.2) 0%, transparent 28%),
+    linear-gradient(180deg, color-mix(in srgb, #050509 72%, var(--background) 28%) 0%, var(--background) 60%, color-mix(in srgb, var(--background) 88%, black 12%) 100%);
+}
+
+:root[data-theme="dark"] .home-hero__grid {
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--border) 42%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--border) 32%, transparent) 1px, transparent 1px);
+}
+
+:root[data-theme="dark"] .home-hero__card {
+  background:
+    linear-gradient(160deg, color-mix(in srgb, var(--card) 78%, var(--color-brand-900) 22%) 0%, color-mix(in srgb, var(--card) 92%, black 8%) 52%, color-mix(in srgb, var(--card) 68%, #111827 32%) 100%);
+  border-color: color-mix(in srgb, var(--glass-border) 86%, transparent);
+  box-shadow:
+    0 34px 84px -42px rgba(0, 0, 0, 0.72),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    inset 0 -1px 0 rgba(99, 102, 241, 0.12);
+}
+
+:root[data-theme="dark"] .home-hero__shine {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+}
+
+:root[data-theme="dark"] .home-hero__accent {
+  opacity: 0.28;
+}
+
+:root[data-theme="dark"] .home-hero__cta {
+  box-shadow:
+    0 24px 42px -24px rgba(99, 102, 241, 0.58),
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+}
+
+:root[data-theme="dark"] .home-hero__cta:hover {
+  box-shadow:
+    0 30px 52px -24px rgba(99, 102, 241, 0.68),
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+}
+
+:root[data-theme="dark"] .home-hero__chip {
+  border-color: color-mix(in srgb, var(--border) 82%, transparent);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--card) 84%, rgba(99, 102, 241, 0.12) 16%) 0%, color-mix(in srgb, var(--card) 94%, black 6%) 100%);
+  color: color-mix(in srgb, white 72%, var(--muted-foreground) 28%);
+  box-shadow:
+    0 20px 30px -28px rgba(0, 0, 0, 0.56),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .home-hero__backdrop {
+    background:
+      radial-gradient(circle at top, color-mix(in srgb, var(--color-brand-900) 58%, transparent) 0%, transparent 48%),
+      radial-gradient(circle at 18% 18%, color-mix(in srgb, var(--color-brand-600) 24%, transparent) 0%, transparent 30%),
+      radial-gradient(circle at 82% 20%, rgba(168, 85, 247, 0.2) 0%, transparent 28%),
+      linear-gradient(180deg, color-mix(in srgb, #050509 72%, var(--background) 28%) 0%, var(--background) 60%, color-mix(in srgb, var(--background) 88%, black 12%) 100%);
+  }
+
+  :root:not([data-theme]) .home-hero__grid {
+    background-image:
+      linear-gradient(to right, color-mix(in srgb, var(--border) 42%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in srgb, var(--border) 32%, transparent) 1px, transparent 1px);
+  }
+
+  :root:not([data-theme]) .home-hero__card {
+    background:
+      linear-gradient(160deg, color-mix(in srgb, var(--card) 78%, var(--color-brand-900) 22%) 0%, color-mix(in srgb, var(--card) 92%, black 8%) 52%, color-mix(in srgb, var(--card) 68%, #111827 32%) 100%);
+    border-color: color-mix(in srgb, var(--glass-border) 86%, transparent);
+    box-shadow:
+      0 34px 84px -42px rgba(0, 0, 0, 0.72),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05),
+      inset 0 -1px 0 rgba(99, 102, 241, 0.12);
+  }
+
+  :root:not([data-theme]) .home-hero__shine {
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+  }
+
+  :root:not([data-theme]) .home-hero__accent {
+    opacity: 0.28;
+  }
+
+  :root:not([data-theme]) .home-hero__cta {
+    box-shadow:
+      0 24px 42px -24px rgba(99, 102, 241, 0.58),
+      0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+  }
+
+  :root:not([data-theme]) .home-hero__cta:hover {
+    box-shadow:
+      0 30px 52px -24px rgba(99, 102, 241, 0.68),
+      0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+  }
+
+  :root:not([data-theme]) .home-hero__chip {
+    border-color: color-mix(in srgb, var(--border) 82%, transparent);
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--card) 84%, rgba(99, 102, 241, 0.12) 16%) 0%, color-mix(in srgb, var(--card) 94%, black 6%) 100%);
+    color: color-mix(in srgb, white 72%, var(--muted-foreground) 28%);
+    box-shadow:
+      0 20px 30px -28px rgba(0, 0, 0, 0.56),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+}
+
 html {
   background-color: var(--background);
 }
