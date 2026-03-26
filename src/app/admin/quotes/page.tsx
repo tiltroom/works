@@ -128,7 +128,7 @@ export default async function AdminQuotesPage({
                 description={quote.description || t(locale, "No summary provided yet.", "Nessuna sintesi fornita.")}
                 action={(
                   <div className="flex flex-wrap items-center gap-2">
-                    {canAssignWorkers ? <Link href={`/admin/quotes?assignWorkersId=${quote.id}`} className={quotesSecondaryButtonClass}>{t(locale, "Assign workers", "Assegna operatori")}</Link> : null}
+                    {canAssignWorkers ? <Link href={`/admin/quotes?assignWorkersId=${quote.id}#assign-workers`} className={quotesSecondaryButtonClass}>{t(locale, "Assign workers", "Assegna operatori")}</Link> : null}
                     {canSign ? <Link href={`/admin/quotes?signQuoteId=${quote.id}`} className={quotesPrimaryButtonClass}>{t(locale, "Sign", "Firma")}</Link> : null}
                   </div>
                 )}
@@ -235,7 +235,7 @@ export default async function AdminQuotesPage({
       </section>
 
       {activeAssignQuote ? (
-        <section className="mt-8">
+        <section id="assign-workers" className="mt-8 scroll-mt-24">
           <QuotesSectionCard
             title={t(locale, "Assign workers", "Assegna operatori")}
             description={t(locale, "Only draft quotes can be staffed before the worker collaboration phase starts.", "Solo i preventivi in bozza possono essere assegnati prima che inizi la collaborazione degli operatori.")}
