@@ -3,7 +3,12 @@ export function millisecondsToHours(ms: number) {
 }
 
 export function hoursToDisplay(hours: number) {
-  return `${hours.toFixed(2)}h`;
+  return hoursToMinutesWithHoursDisplay(hours);
+}
+
+export function hoursToMinutesWithHoursDisplay(hours: number) {
+  const totalMinutes = Math.max(Math.round(hours * 60), 0);
+  return `${totalMinutes} min (${hours.toFixed(2)}h)`;
 }
 
 export function timerStartedAtToNowHours(startedAt: string) {

@@ -1,6 +1,6 @@
 import { createCheckoutForHoursAction } from "@/app/actions/billing";
 import { LogoutButton } from "@/components/logout-button";
-import { hoursToDisplay, millisecondsToHours } from "@/lib/time";
+import { hoursToMinutesWithHoursDisplay, millisecondsToHours } from "@/lib/time";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { localeTag, t } from "@/lib/i18n";
@@ -169,16 +169,16 @@ export default async function CustomerPage() {
                       <div className="grid grid-cols-3 gap-4 mb-4">
                         <div className={metricCardClass}>
                           <p className="mb-1 text-sm text-muted-foreground">{t(locale, "Assigned", "Assegnate")}</p>
-                          <p className="text-xl font-semibold text-foreground">{hoursToDisplay(totalAssigned)}</p>
+                          <p className="text-xl font-semibold text-foreground">{hoursToMinutesWithHoursDisplay(totalAssigned)}</p>
                         </div>
                         <div className={metricCardClass}>
                           <p className="mb-1 text-sm text-muted-foreground">{t(locale, "Used", "Usate")}</p>
-                          <p className="text-xl font-semibold text-foreground">{hoursToDisplay(used)}</p>
+                          <p className="text-xl font-semibold text-foreground">{hoursToMinutesWithHoursDisplay(used)}</p>
                         </div>
                         <div className={`rounded-xl border bg-background/60 p-4 ${isOutOfHours ? 'border-red-500/30' : isLowHours ? 'border-amber-500/30' : 'border-border/70'}`}>
                           <p className="mb-1 text-sm text-muted-foreground">{t(locale, "Remaining", "Rimanenti")}</p>
                           <p className={`text-xl font-semibold ${isOutOfHours ? 'text-red-600 dark:text-red-400' : isLowHours ? 'text-amber-700 dark:text-amber-400' : 'text-brand-600 dark:text-brand-400'}`}>
-                            {hoursToDisplay(remaining)}
+                            {hoursToMinutesWithHoursDisplay(remaining)}
                           </p>
                         </div>
                       </div>
