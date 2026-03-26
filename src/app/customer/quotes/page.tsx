@@ -1,35 +1,20 @@
 import Link from "next/link";
 import {
-  createQuoteDraftAction,
+  deleteQuoteDraftAction,
   loadQuotesPageData,
   startQuoteConversionCheckoutAction,
-  updateQuoteDraftAction,
 } from "@/app/actions/quotes";
 import { LogoutButton } from "@/components/logout-button";
 import {
-  QuotesCommentsList,
-  QuotesHeader,
-  QuotesRichTextContent,
-  QuotesRichTextEditor,
-  QuotesSectionCard,
-  QuotesSignatureSummary,
-  QuotesSubtaskCard,
-  QuotesWorkerEntriesCard,
-  quotesInputClass,
+  QuoteActionModal,
   quotesPrimaryButtonClass,
   quotesSecondaryButtonClass,
-  quotesTextareaClass,
 } from "@/components/quotes";
 import { QueryToast } from "@/components/ui/query-toast";
 import { requireRole } from "@/lib/auth";
 import { localeTag, t } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n-server";
-import {
-  formatCurrencyAmount,
-  formatQuoteHours,
-  formatQuoteStatus,
-  getQuoteStatusTone,
-} from "@/lib/quotes";
+import { formatQuoteHours, formatQuoteStatus } from "@/lib/quotes";
 import type { QueryToastVariant } from "@/lib/query-toast";
 
 export const dynamic = "force-dynamic";
@@ -41,13 +26,13 @@ function formatDateTime(tag: string, value: string | null) {
 export default async function CustomerQuotesPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ editQuoteId?: string; checkout?: string; toast?: string; toastMessage?: string }> | { editQuoteId?: string; checkout?: string; toast?: string; toastMessage?: string };
+  searchParams?: Promise<{ deleteQuoteId?: string; checkout?: string; toast?: string; toastMessage?: string }> | { deleteQuoteId?: string; checkout?: string; toast?: string; toastMessage?: string };
 }) {
   const locale = await getLocale();
   const tag = localeTag(locale);
   const profile = await requireRole(["customer"]);
   const params = await Promise.resolve(searchParams ?? {});
-  const editQuoteId = params.editQuoteId?.trim();
+  const deleteQuoteId = params.deleteQuoteId?.trim();
   const checkoutParam = params.checkout?.trim();
   const toastTypeParam = params.toast?.trim();
   const toastMessageParam = params.toastMessage?.trim();
@@ -61,7 +46,7 @@ export default async function CustomerQuotesPage({
         : null;
 
   const quotesData = await loadQuotesPageData("customer", profile.id);
-  const editingQuote = quotesData.quotes.find((quote) => quote.id === editQuoteId) ?? null;
+  const deletingQuote = quotesData.quotes.find((quote) => quote.id === deleteQuoteId && quote.status === "draft") ?? null;
   const draftCount = quotesData.quotes.filter((quote) => quote.status === "draft").length;
   const signedCount = quotesData.quotes.filter((quote) => quote.status === "signed").length;
   const convertedCount = quotesData.quotes.filter((quote) => quote.status === "converted").length;
@@ -89,10 +74,13 @@ export default async function CustomerQuotesPage({
             {t(locale, "Draft the quote, collaborate through notes and subtasks, then convert it with one prepayment step after admin sign-off.", "Prepara il preventivo, collabora tramite note e sottoattività, poi convertilo con un unico passaggio di prepagamento dopo la firma dell'amministratore.")}
           </p>
         </div>
-        <LogoutButton />
+        <div className="flex items-center gap-2">
+          <Link href="/customer/quotes/new" className={quotesPrimaryButtonClass}>{t(locale, "New draft", "Nuova bozza")}</Link>
+          <LogoutButton />
+        </div>
       </header>
 
-      <section className="mb-8 grid gap-4 md:grid-cols-3">
+      <section className="mb-8 mt-8 grid gap-4 md:grid-cols-3">
         <div className="rounded-xl border border-brand-500/20 bg-background/60 p-4">
           <p className="text-xs uppercase tracking-wide text-muted-foreground">{t(locale, "Drafts", "Bozze")}</p>
           <p className="mt-2 text-2xl font-semibold text-foreground">{draftCount}</p>
@@ -106,43 +94,6 @@ export default async function CustomerQuotesPage({
           <p className="mt-2 text-2xl font-semibold text-foreground">{convertedCount}</p>
         </div>
       </section>
-
-      {quotesData.backendAvailable ? (
-        <QuotesSectionCard
-          title={t(locale, "Create new draft", "Crea nuova bozza")}
-          description={t(locale, "Keep the summary compact, then use the rich text body for scope, imagery, and delivery details.", "Mantieni il riepilogo compatto, poi usa il corpo rich text per scopo, immagini e dettagli di consegna.")}
-          className="mb-8"
-        >
-          <form action={createQuoteDraftAction} className="grid gap-4">
-            <div className="grid gap-4">
-              <div className="space-y-1.5">
-                <label htmlFor="customer-quote-title" className="text-sm font-medium text-foreground">{t(locale, "Title", "Titolo")}</label>
-                <input id="customer-quote-title" name="title" required className={quotesInputClass} placeholder={t(locale, "New product launch quote", "Preventivo lancio nuovo prodotto")} />
-              </div>
-              <div className="space-y-1.5">
-                <label htmlFor="customer-quote-description" className="text-sm font-medium text-foreground">{t(locale, "Summary", "Sintesi")}</label>
-                <textarea id="customer-quote-description" name="description" rows={3} className={quotesTextareaClass} placeholder={t(locale, "Objectives, timing, and budget context.", "Obiettivi, tempistiche e contesto budget.")} />
-              </div>
-            </div>
-
-            <QuotesRichTextEditor
-              name="contentHtml"
-              jsonName="contentJson"
-              label={t(locale, "Quote body", "Corpo del preventivo")}
-              placeholder={t(locale, "Describe scope, deliverables, assumptions, milestones, and any references.", "Descrivi scopo, deliverable, assunzioni, milestone e riferimenti.")}
-              helpText={t(locale, "Use rich text and inline images when visual context helps the team estimate accurately.", "Usa testo ricco e immagini inline quando il contesto visivo aiuta il team a stimare con precisione.")}
-              imageButtonLabel={t(locale, "Insert image", "Inserisci immagine")}
-              unsupportedImageTypeMessage={t(locale, "Only JPG, PNG, WEBP, and GIF files are allowed.", "Sono consentiti solo file JPG, PNG, WEBP e GIF.")}
-              imageTooLargeMessage={t(locale, "Images must be 1MB or smaller.", "Le immagini devono essere da 1MB o meno.")}
-              imageUploadErrorMessage={t(locale, "Image upload failed.", "Caricamento immagine non riuscito.")}
-            />
-
-            <div className="flex justify-end">
-              <button className={quotesPrimaryButtonClass}>{t(locale, "Save draft", "Salva bozza")}</button>
-            </div>
-          </form>
-        </QuotesSectionCard>
-      ) : null}
 
       <section className="space-y-6">
         <div className="flex items-center justify-between gap-3">
@@ -159,182 +110,88 @@ export default async function CustomerQuotesPage({
 
         {quotesData.backendAvailable && quotesData.quotes.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border/80 bg-background/40 px-4 py-8 text-center text-sm text-muted-foreground">
-            {t(locale, "Create the first draft above to start the quotes workflow.", "Crea la prima bozza qui sopra per avviare il flusso dei preventivi.")}
+            {t(locale, "Create the first draft to start the quotes workflow.", "Crea la prima bozza per avviare il flusso dei preventivi.")}
           </div>
         ) : null}
 
-        {quotesData.quotes.map((quote) => {
-          const assignedWorkers = quotesData.workers.filter((assignment) => assignment.quoteId === quote.id);
-          const subtasks = quotesData.subtasks.filter((subtask) => subtask.quoteId === quote.id);
-          const subtaskIds = new Set(subtasks.map((subtask) => subtask.id));
-          const entries = quotesData.subtaskEntries.filter((entry) => subtaskIds.has(entry.quoteSubtaskId));
-          const comments = quotesData.comments.filter((comment) => comment.quoteId === quote.id);
-          const latestPrepayment = quotesData.prepaymentSessions.find((session) => session.quoteId === quote.id) ?? null;
-          const canEdit = quote.status === "draft";
-          const canCheckout = quote.status === "signed" && !quote.linkedProjectId;
+        {quotesData.quotes.length > 0 ? (
+          <div className="overflow-hidden rounded-xl border border-border/70 bg-background/45">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-border bg-muted/50 text-xs uppercase text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">{t(locale, "Title", "Titolo")}</th>
+                    <th className="px-4 py-3 font-medium">{t(locale, "Status", "Stato")}</th>
+                    <th className="px-4 py-3 font-medium">{t(locale, "Estimated", "Stimato")}</th>
+                    <th className="px-4 py-3 font-medium">{t(locale, "Logged", "Registrato")}</th>
+                    <th className="px-4 py-3 font-medium">{t(locale, "Updated", "Aggiornato")}</th>
+                    <th className="px-4 py-3 font-medium">{t(locale, "Actions", "Azioni")}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/70">
+                  {quotesData.quotes.map((quote) => {
+                    const canEdit = quote.status === "draft";
+                    const canDelete = quote.status === "draft";
+                    const canCheckout = quote.status === "signed" && !quote.linkedProjectId;
 
-          return (
-            <article key={quote.id} className="space-y-4">
-              <QuotesHeader
-                title={quote.title}
-                statusLabel={formatQuoteStatus(locale, quote.status)}
-                statusTone={getQuoteStatusTone(quote.status)}
-                description={quote.description || t(locale, "No summary provided yet.", "Nessuna sintesi fornita.")}
-                action={(
-                  <div className="flex flex-wrap items-center gap-2">
-                    {canEdit ? (
-                      <Link href={`/customer/quotes?editQuoteId=${quote.id}`} className={quotesSecondaryButtonClass}>
-                        {t(locale, "Edit draft", "Modifica bozza")}
-                      </Link>
-                    ) : null}
-                    {canCheckout ? (
-                      <form action={startQuoteConversionCheckoutAction}>
-                        <input type="hidden" name="quoteId" value={quote.id} />
-                        <button className={quotesPrimaryButtonClass}>{t(locale, "Convert & prepay", "Converti e pre-paga")}</button>
-                      </form>
-                    ) : null}
-                  </div>
-                )}
-                meta={[
-                  { label: t(locale, "Estimated", "Stimato"), value: formatQuoteHours(quote.totalEstimatedHours), tone: "accent" },
-                  { label: t(locale, "Logged", "Registrato"), value: formatQuoteHours(quote.totalLoggedHours) },
-                  { label: t(locale, "Workers", "Operatori"), value: assignedWorkers.length },
-                  { label: t(locale, "Updated", "Aggiornato"), value: formatDateTime(tag, quote.updatedAt) },
-                ]}
-              />
-
-              <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
-                <QuotesSectionCard title={t(locale, "Quote content", "Contenuto del preventivo")}> 
-                  <QuotesRichTextContent
-                    html={quote.contentHtml ?? ""}
-                    emptyMessage={t(locale, "No detailed body added yet.", "Nessun corpo dettagliato aggiunto.")}
-                  />
-                </QuotesSectionCard>
-
-                <QuotesSignatureSummary
-                  title={t(locale, "Sign-off", "Firma")}
-                  description={t(locale, "Admin sign-off unlocks the single conversion + prepayment step.", "La firma dell'amministratore sblocca l'unico passaggio di conversione + prepagamento.")}
-                  signerName={quote.signedByName}
-                  signedAtLabel={formatDateTime(tag, quote.signedAt)}
-                  emptyMessage={t(locale, "Waiting for admin signature.", "In attesa della firma dell'amministratore.")}
-                />
-              </div>
-
-              <div className="grid gap-4 xl:grid-cols-2">
-                <QuotesSubtaskCard
-                  title={t(locale, "Subtask estimates", "Stime sottoattività")}
-                  description={t(locale, "Worker-generated effort breakdown used to determine conversion hours.", "Suddivisione dello sforzo generata dagli operatori, usata per determinare le ore di conversione.")}
-                  items={subtasks.map((subtask) => {
-                    const relatedEntries = entries.filter((entry) => entry.quoteSubtaskId === subtask.id);
-                    return {
-                      id: subtask.id,
-                      title: subtask.title,
-                      description: subtask.description,
-                      estimateLabel: formatQuoteHours(subtask.estimatedHours),
-                      loggedLabel: formatQuoteHours(relatedEntries.reduce((total, entry) => total + entry.loggedHours, 0)),
-                    };
+                    return (
+                      <tr key={quote.id} className="transition-colors hover:bg-accent/60">
+                        <td className="px-4 py-3 align-top">
+                          <div className="space-y-1">
+                            <p className="font-medium text-foreground">{quote.title}</p>
+                            <p className="max-w-md text-xs text-muted-foreground">{quote.description || t(locale, "No summary provided yet.", "Nessuna sintesi fornita.")}</p>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 align-top text-muted-foreground">{formatQuoteStatus(locale, quote.status)}</td>
+                        <td className="px-4 py-3 align-top text-muted-foreground">{formatQuoteHours(quote.totalEstimatedHours)}</td>
+                        <td className="px-4 py-3 align-top text-muted-foreground">{formatQuoteHours(quote.totalLoggedHours)}</td>
+                        <td className="px-4 py-3 align-top text-muted-foreground">{formatDateTime(tag, quote.updatedAt)}</td>
+                        <td className="px-4 py-3 align-top">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Link href={`/customer/quotes/${quote.id}`} className={quotesSecondaryButtonClass}>{t(locale, "View", "Vedi")}</Link>
+                            {canEdit ? <Link href={`/customer/quotes/${quote.id}/edit`} className={quotesSecondaryButtonClass}>{t(locale, "Edit", "Modifica")}</Link> : null}
+                            {canDelete ? <Link href={`/customer/quotes?deleteQuoteId=${quote.id}`} className="inline-flex items-center justify-center rounded-lg border border-red-500/40 bg-red-500/5 px-3 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-500/10 dark:text-red-300">{t(locale, "Delete", "Elimina")}</Link> : null}
+                            {canCheckout ? (
+                              <form action={startQuoteConversionCheckoutAction}>
+                                <input type="hidden" name="quoteId" value={quote.id} />
+                                <button className={quotesPrimaryButtonClass}>{t(locale, "Convert & prepay", "Converti e pre-paga")}</button>
+                              </form>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    );
                   })}
-                  emptyMessage={t(locale, "No subtasks estimated yet.", "Nessuna sottoattività stimata.")}
-                />
-
-                <QuotesWorkerEntriesCard
-                  title={t(locale, "Logged subtask work", "Lavoro registrato sulle sottoattività")}
-                  description={t(locale, "Progress entries added by assigned workers while the quote remains draft.", "Voci di avanzamento aggiunte dagli operatori assegnati mentre il preventivo resta in bozza.")}
-                  items={entries.map((entry) => ({
-                    id: entry.id,
-                    workerName: entry.workerName || t(locale, "Worker", "Operatore"),
-                    subtaskTitle: subtasks.find((subtask) => subtask.id === entry.quoteSubtaskId)?.title ?? t(locale, "Unknown subtask", "Sottoattività sconosciuta"),
-                    loggedLabel: formatQuoteHours(entry.loggedHours),
-                    note: entry.note,
-                    metaLabel: formatDateTime(tag, entry.createdAt),
-                  }))}
-                  emptyMessage={t(locale, "No logged work yet.", "Nessun lavoro registrato.")}
-                />
-              </div>
-
-              <div className="grid gap-4 xl:grid-cols-2">
-                <QuotesCommentsList
-                  title={t(locale, "Discussion", "Discussione")}
-                  description={t(locale, "Shared customer, worker, and admin notes for this quote.", "Note condivise di cliente, operatori e amministratore per questo preventivo.")}
-                  comments={comments.map((comment) => ({
-                    id: comment.id,
-                    authorName: comment.authorName || t(locale, comment.authorRole === "customer" ? "Customer" : comment.authorRole === "admin" ? "Admin" : "Worker", comment.authorRole === "customer" ? "Cliente" : comment.authorRole === "admin" ? "Admin" : "Operatore"),
-                    createdAtLabel: formatDateTime(tag, comment.createdAt),
-                    metaLabel: comment.authorRole,
-                    body: <QuotesRichTextContent html={comment.commentHtml ?? ""} emptyMessage={t(locale, "No comment content", "Nessun contenuto commento")} />,
-                  }))}
-                  emptyMessage={t(locale, "No comments yet.", "Nessun commento ancora.")}
-                />
-
-                <QuotesSectionCard title={t(locale, "Conversion & prepayment", "Conversione e prepagamento")}>
-                  <div className="space-y-3 text-sm text-muted-foreground">
-                    <p>
-                      {quote.status === "draft"
-                        ? t(locale, "Customer editing and team collaboration are still open. Conversion becomes available only after admin sign-off.", "La modifica cliente e la collaborazione del team sono ancora aperte. La conversione diventa disponibile solo dopo la firma dell'amministratore.")
-                        : quote.status === "signed"
-                          ? t(locale, "Admin sign-off is complete. Use the button above to pay once and convert this quote into a project with the estimated hours.", "La firma dell'amministratore è completa. Usa il pulsante sopra per pagare una volta e convertire questo preventivo in un progetto con le ore stimate.")
-                          : t(locale, "This quote has already been converted into a project.", "Questo preventivo è già stato convertito in un progetto.")}
-                    </p>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-xl border border-border/70 bg-background/60 px-3 py-3">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{t(locale, "Latest prepayment", "Ultimo prepagamento")}</p>
-                        <p className="mt-1 text-sm font-medium text-foreground">{latestPrepayment ? formatCurrencyAmount(latestPrepayment.amountCents, latestPrepayment.currency) : "—"}</p>
-                        {latestPrepayment ? <p className="mt-1 text-xs text-muted-foreground">{latestPrepayment.status === "paid" ? t(locale, "Paid", "Pagato") : t(locale, "Pending", "In attesa")}</p> : null}
-                      </div>
-                      <div className="rounded-xl border border-border/70 bg-background/60 px-3 py-3">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{t(locale, "Linked project", "Progetto collegato")}</p>
-                        <p className="mt-1 text-sm font-medium text-foreground">{quote.linkedProjectName || "—"}</p>
-                        {quote.convertedAt ? <p className="mt-1 text-xs text-muted-foreground">{formatDateTime(tag, quote.convertedAt)}</p> : null}
-                      </div>
-                    </div>
-                  </div>
-                </QuotesSectionCard>
-              </div>
-            </article>
-          );
-        })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : null}
       </section>
 
-      {editingQuote ? (
-        <section className="mt-8">
-          <QuotesSectionCard
-            title={t(locale, "Edit draft", "Modifica bozza")}
-            description={t(locale, "Update the rich text body while the quote is still draft.", "Aggiorna il corpo rich text mentre il preventivo è ancora in bozza.")}
-            action={<Link href="/customer/quotes" className={quotesSecondaryButtonClass}>{t(locale, "Close", "Chiudi")}</Link>}
-          >
-            <form action={updateQuoteDraftAction} className="grid gap-4">
-              <input type="hidden" name="quoteId" value={editingQuote.id} />
-              <div className="grid gap-4">
-                <div className="space-y-1.5">
-                  <label htmlFor="edit-customer-quote-title" className="text-sm font-medium text-foreground">{t(locale, "Title", "Titolo")}</label>
-                  <input id="edit-customer-quote-title" name="title" required defaultValue={editingQuote.title} className={quotesInputClass} />
-                </div>
-                <div className="space-y-1.5">
-                  <label htmlFor="edit-customer-quote-description" className="text-sm font-medium text-foreground">{t(locale, "Summary", "Sintesi")}</label>
-                  <textarea id="edit-customer-quote-description" name="description" rows={3} defaultValue={editingQuote.description ?? ""} className={quotesTextareaClass} />
-                </div>
-              </div>
-
-              <QuotesRichTextEditor
-                name="contentHtml"
-                jsonName="contentJson"
-                label={t(locale, "Quote body", "Corpo del preventivo")}
-                initialHtml={editingQuote.contentHtml ?? ""}
-                initialJson={editingQuote.contentJson}
-                placeholder={t(locale, "Describe scope, deliverables, assumptions, milestones, and any references.", "Descrivi scopo, deliverable, assunzioni, milestone e riferimenti.")}
-                helpText={t(locale, "Use the same editor and upload flow as the final customer draft body.", "Usa lo stesso editor e flusso di upload del corpo finale della bozza cliente.")}
-                imageButtonLabel={t(locale, "Insert image", "Inserisci immagine")}
-                unsupportedImageTypeMessage={t(locale, "Only JPG, PNG, WEBP, and GIF files are allowed.", "Sono consentiti solo file JPG, PNG, WEBP e GIF.")}
-                imageTooLargeMessage={t(locale, "Images must be 1MB or smaller.", "Le immagini devono essere da 1MB o meno.")}
-                imageUploadErrorMessage={t(locale, "Image upload failed.", "Caricamento immagine non riuscito.")}
-              />
-
-              <div className="flex justify-end">
-                <button className={quotesPrimaryButtonClass}>{t(locale, "Save changes", "Salva modifiche")}</button>
-              </div>
-            </form>
-          </QuotesSectionCard>
-        </section>
+      {deletingQuote ? (
+        <QuoteActionModal
+          title={t(locale, "Delete draft", "Elimina bozza")}
+          closeHref="/customer/quotes"
+          successRedirectHref="/customer/quotes"
+          action={deleteQuoteDraftAction}
+          closeLabel={t(locale, "Close", "Chiudi")}
+          cancelLabel={t(locale, "Cancel", "Annulla")}
+          submitLabel={t(locale, "Delete", "Elimina")}
+          submittingLabel={t(locale, "Deleting…", "Eliminazione in corso…")}
+          successMessage={t(locale, "Draft deleted successfully", "Bozza eliminata con successo")}
+          genericErrorMessage={t(locale, "An error occurred while deleting the draft.", "Si è verificato un errore durante l'eliminazione della bozza.")}
+        >
+          <input type="hidden" name="quoteId" value={deletingQuote.id} />
+          <div className="space-y-3 text-sm text-muted-foreground">
+            <p>
+              {t(locale, "Are you sure you want to delete", "Sei sicuro di voler eliminare")} <span className="font-semibold text-foreground">{deletingQuote.title}</span>? {t(locale, "This action cannot be undone.", "Questa azione non può essere annullata.")}
+            </p>
+            <p>
+              {t(locale, "Only draft quotes can be deleted. Converted projects remain protected.", "Solo i preventivi in bozza possono essere eliminati. I progetti convertiti restano protetti.")}
+            </p>
+          </div>
+        </QuoteActionModal>
       ) : null}
     </main>
   );

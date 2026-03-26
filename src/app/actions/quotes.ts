@@ -415,6 +415,34 @@ export async function updateQuoteDraftAction(formData: FormData) {
   revalidateQuotesModule();
 }
 
+export async function deleteQuoteDraftAction(formData: FormData) {
+  const locale = await getLocale();
+  const profile = await requireRole(["customer"]);
+  const quoteId = trimString(formData, "quoteId");
+
+  if (!quoteId) {
+    throw new Error(t(locale, "Invalid quote payload", "Payload preventivo non valido"));
+  }
+
+  const existing = await getQuoteForCustomer(quoteId, profile.id);
+  if (existing.status !== "draft") {
+    throw new Error(t(locale, "Only draft quotes can be deleted", "Solo i preventivi in bozza possono essere eliminati"));
+  }
+
+  const supabase = await assertQuotesBackend();
+  const { error } = await supabase
+    .from("quotes")
+    .delete()
+    .eq("id", quoteId)
+    .eq("customer_id", profile.id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  revalidateQuotesModule();
+}
+
 export async function assignQuoteWorkersAction(formData: FormData) {
   const locale = await getLocale();
   const admin = await requireRole(["admin"]);

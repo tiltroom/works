@@ -1,5 +1,7 @@
 export * from "@/components/quotes/quotes-comments";
 export * from "@/components/quotes/quotes-header";
+export * from "@/components/quotes/quote-action-modal";
+export * from "@/components/quotes/customer-quote-detail";
 export * from "@/components/quotes/quotes-rich-text-content";
 export * from "@/components/quotes/quotes-rich-text-editor";
 export * from "@/components/quotes/quotes-shared";
