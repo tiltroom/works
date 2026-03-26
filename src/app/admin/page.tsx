@@ -1,8 +1,9 @@
 import { createProjectAction, deleteProjectAction, updateProjectAction } from "@/app/actions/projects";
 import { deleteInvitationAction, inviteUserAction } from "@/app/actions/invitations";
-import { deletePlatformUserAction, updateCustomerHourlyRateAction } from "@/app/actions/admin-users";
+import { deletePlatformUserAction, updateCustomerHourlyRateAction, updatePlatformUserAction } from "@/app/actions/admin-users";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { LogoutButton } from "@/components/logout-button";
 import Link from "next/link";
 import { t } from "@/lib/i18n";
@@ -27,6 +28,7 @@ type CustomerRateRow = {
 type AdminListedUser = {
   id: string;
   full_name: string | null;
+  email: string | null;
   role: "admin" | "customer" | "worker";
 };
 
@@ -89,11 +91,12 @@ function formatAssignedWorkerNames(
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ tab?: string; editProjectId?: string; deleteProjectId?: string; deleteInvitationId?: string; deleteUserId?: string }> | { tab?: string; editProjectId?: string; deleteProjectId?: string; deleteInvitationId?: string; deleteUserId?: string };
+  searchParams?: Promise<{ tab?: string; editProjectId?: string; deleteProjectId?: string; deleteInvitationId?: string; deleteUserId?: string; editUserId?: string }> | { tab?: string; editProjectId?: string; deleteProjectId?: string; deleteInvitationId?: string; deleteUserId?: string; editUserId?: string };
 }) {
   const locale = await getLocale();
   await requireRole(["admin"]);
   const supabase = await createClient();
+  const adminClient = createAdminClient();
 
   const params = await Promise.resolve(searchParams ?? {});
   const tabParam = params.tab;
@@ -101,9 +104,10 @@ export default async function AdminPage({
   const deleteProjectIdParam = params.deleteProjectId;
   const deleteInvitationIdParam = params.deleteInvitationId;
   const deleteUserIdParam = params.deleteUserId;
+  const editUserIdParam = params.editUserId;
   const activeTab: AdminTab = tabParam === "projects" || tabParam === "users" ? tabParam : "overview";
 
-  const [{ data: customerProfiles }, { data: customerRates, error: customerRatesError }, { data: workers }, { data: admins }, { data: projects }, { data: projectTimeEntries }, { data: invitations }] = await Promise.all([
+  const [{ data: customerProfiles }, { data: customerRates, error: customerRatesError }, { data: workers }, { data: admins }, { data: projects }, { data: projectTimeEntries }, { data: invitations }, { data: authUsersData, error: authUsersError }] = await Promise.all([
     supabase.from("profiles").select("id,full_name,role").eq("role", "customer"),
     supabase.from("profiles").select("id,custom_hourly_rate_cents").eq("role", "customer"),
     supabase.from("profiles").select("id,full_name,role").eq("role", "worker"),
@@ -116,6 +120,7 @@ export default async function AdminPage({
       .from("invitations")
       .select("id,email,role,full_name,created_at,accepted_at")
       .order("created_at", { ascending: false }),
+    adminClient.auth.admin.listUsers({ page: 1, perPage: 1000 }),
   ]);
 
   const missingCustomerRateColumn = customerRatesError?.code === "PGRST204"
@@ -127,6 +132,14 @@ export default async function AdminPage({
     throw new Error(customerRatesError.message);
   }
 
+  if (authUsersError) {
+    throw new Error(authUsersError.message);
+  }
+
+  const authEmailById = new Map(
+    (authUsersData?.users ?? []).map((user) => [user.id, user.email?.trim().toLowerCase() ?? null]),
+  );
+
   const customerRatesById = new Map(
     ((customerRates ?? []) as CustomerRateRow[]).map((customerRate) => [customerRate.id, customerRate.custom_hourly_rate_cents]),
   );
@@ -136,20 +149,27 @@ export default async function AdminPage({
     custom_hourly_rate_cents: customerRatesById.get(customer.id) ?? null,
   }));
   const allUsers: AdminListedUser[] = [
-    ...((admins ?? []) as AdminListedUser[]),
+    ...((admins ?? []) as Array<{ id: string; full_name: string | null; role: "admin" }>).map((user) => ({
+      ...user,
+      email: authEmailById.get(user.id) ?? null,
+    })),
     ...customers.map((customer) => ({
       id: customer.id,
       full_name: customer.full_name,
+      email: authEmailById.get(customer.id) ?? null,
       role: customer.role,
     })),
-    ...((workers ?? []) as AdminListedUser[]),
+    ...((workers ?? []) as Array<{ id: string; full_name: string | null; role: "worker" }>).map((user) => ({
+      ...user,
+      email: authEmailById.get(user.id) ?? null,
+    })),
   ].sort((left, right) => {
-    const leftLabel = (left.full_name || left.id).toLocaleLowerCase();
-    const rightLabel = (right.full_name || right.id).toLocaleLowerCase();
+    const leftLabel = (left.full_name || left.email || left.id).toLocaleLowerCase();
+    const rightLabel = (right.full_name || right.email || right.id).toLocaleLowerCase();
 
     return leftLabel.localeCompare(rightLabel);
   });
-  const workersById = new Map(((workers ?? []) as AdminListedUser[]).map((worker) => [worker.id, worker.full_name]));
+  const workersById = new Map((((workers ?? []) as Array<{ id: string; full_name: string | null }>)).map((worker) => [worker.id, worker.full_name]));
 
   const pendingInvitations = (invitations ?? []).filter((invitation) => !invitation.accepted_at);
   const totalAssignedHours = (projects ?? []).reduce((sum, project) => sum + Number(project.assigned_hours ?? 0), 0);
@@ -164,6 +184,7 @@ export default async function AdminPage({
   const deletingProject = (projects ?? []).find((project) => project.id === deleteProjectIdParam) ?? null;
   const deletingInvitation = pendingInvitations.find((invitation) => invitation.id === deleteInvitationIdParam) ?? null;
   const deletingUser = allUsers.find((user) => user.id === deleteUserIdParam) ?? null;
+  const editingUser = allUsers.find((user) => user.id === editUserIdParam) ?? null;
   const editingProjectWorkerIds = editingProject
     ? ((editingProject.project_workers as ProjectWorkerAssignment[] | null) ?? []).map((assignment) => assignment.worker_id)
     : [];
@@ -701,10 +722,10 @@ export default async function AdminPage({
                         <tr key={user.id} className={tableRowClass}>
                           <td className="px-4 py-3">
                             <div className="flex flex-col">
-                               <span className="font-medium text-foreground">{user.full_name || t(locale, "No name", "Senza nome")}</span>
-                              <span className="text-xs text-muted-foreground">{user.id}</span>
-                            </div>
-                          </td>
+                              <span className="font-medium text-foreground">{user.full_name || t(locale, "No name", "Senza nome")}</span>
+                              <span className="text-xs text-muted-foreground">{user.email || user.id}</span>
+                             </div>
+                           </td>
                           <td className="px-4 py-3">
                             <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize ${
                               user.role === "admin"
@@ -725,6 +746,12 @@ export default async function AdminPage({
                           <td className="px-4 py-3">
                             <div className="flex items-center justify-end gap-2">
                               <Link
+                                href={`/admin?tab=users&editUserId=${user.id}`}
+                                className="rounded-md border border-border bg-background/60 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                              >
+                                {t(locale, "Edit", "Modifica")}
+                              </Link>
+                              <Link
                                 href={`/admin?tab=users&deleteUserId=${user.id}`}
                                 className="rounded-md border border-red-500/40 px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-500/10 dark:text-red-300"
                               >
@@ -739,6 +766,60 @@ export default async function AdminPage({
                 </table>
               </div>
             </div>
+
+            {editingUser && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
+                <div className="w-full max-w-xl rounded-2xl border border-border bg-card shadow-2xl">
+                  <div className="flex items-center justify-between border-b border-border px-5 py-4">
+                    <h3 className="text-lg font-semibold text-foreground">{t(locale, "Edit User", "Modifica utente")}</h3>
+                    <Link href="/admin?tab=users" className="rounded-md border border-border bg-background/60 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
+                      {t(locale, "Close", "Chiudi")}
+                    </Link>
+                  </div>
+
+                  <form action={updatePlatformUserAction} className="grid gap-4 p-5 md:grid-cols-2">
+                    <input type="hidden" name="userId" value={editingUser.id} />
+
+                    <div className="space-y-1.5 md:col-span-2">
+                      <label htmlFor="modal-user-full-name" className="text-sm font-medium text-foreground">{t(locale, "Full Name", "Nome completo")}</label>
+                      <input
+                        id="modal-user-full-name"
+                        name="fullName"
+                        defaultValue={editingUser.full_name ?? ""}
+                        placeholder={t(locale, "John Doe", "Mario Rossi")}
+                        className={inputClass}
+                      />
+                    </div>
+
+                    <div className="space-y-1.5 md:col-span-2">
+                      <label htmlFor="modal-user-email" className="text-sm font-medium text-foreground">{t(locale, "Email Address", "Indirizzo email")}</label>
+                      <input
+                        id="modal-user-email"
+                        name="email"
+                        type="email"
+                        required
+                        defaultValue={editingUser.email ?? ""}
+                        placeholder={t(locale, "user@example.com", "utente@esempio.com")}
+                        className={inputClass}
+                      />
+                    </div>
+
+                    <div className="rounded-xl border border-border bg-background/55 px-4 py-3 text-xs text-muted-foreground md:col-span-2">
+                      <p>{t(locale, "Role", "Ruolo")}: <span className="font-medium capitalize text-foreground">{editingUser.role}</span></p>
+                    </div>
+
+                    <div className="md:col-span-2 flex items-center justify-end gap-2">
+                      <Link href="/admin?tab=users" className="rounded-lg border border-border bg-background/60 px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
+                        {t(locale, "Cancel", "Annulla")}
+                      </Link>
+                      <button type="submit" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-500 transition-colors">
+                        {t(locale, "Save Changes", "Salva modifiche")}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
 
             {deletingUser && (
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">

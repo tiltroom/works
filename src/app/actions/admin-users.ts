@@ -55,6 +55,120 @@ export async function updateCustomerHourlyRateAction(formData: FormData) {
   revalidatePath("/admin");
 }
 
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export async function updatePlatformUserAction(formData: FormData) {
+  const locale = await getLocale();
+  const currentAdmin = await requireRole(["admin"]);
+
+  const userId = String(formData.get("userId") ?? "").trim();
+  const fullNameValue = String(formData.get("fullName") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+
+  if (!userId || !uuidPattern.test(userId)) {
+    throw new Error(t(locale, "Invalid user payload", "Payload utente non valido"));
+  }
+
+  if (!email || !emailPattern.test(email)) {
+    throw new Error(t(locale, "Invalid email address", "Indirizzo email non valido"));
+  }
+
+  const admin = createAdminClient();
+  const { data: profile, error: profileError } = await admin
+    .from("profiles")
+    .select("id,role")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (profileError) {
+    throw new Error(profileError.message);
+  }
+
+  if (!profile) {
+    throw new Error(t(locale, "User not found", "Utente non trovato"));
+  }
+
+  const { data: authUserData, error: authUserError } = await admin.auth.admin.getUserById(userId);
+
+  if (authUserError || !authUserData.user) {
+    throw new Error(authUserError?.message ?? t(locale, "User not found", "Utente non trovato"));
+  }
+
+  const currentEmail = authUserData.user.email?.trim().toLowerCase();
+  const normalizedFullName = fullNameValue || null;
+
+  const { error: profileUpdateError } = await admin
+    .from("profiles")
+    .update({ full_name: normalizedFullName })
+    .eq("id", userId);
+
+  if (profileUpdateError) {
+    throw new Error(profileUpdateError.message);
+  }
+
+  const { error: authUpdateError } = await admin.auth.admin.updateUserById(userId, {
+    email,
+    email_confirm: true,
+    user_metadata: {
+      ...(authUserData.user.user_metadata ?? {}),
+      full_name: normalizedFullName ?? "",
+    },
+  });
+
+  if (authUpdateError) {
+    throw new Error(authUpdateError.message);
+  }
+
+  if (currentEmail && currentEmail !== email) {
+    const { data: existingInvitation, error: existingInvitationError } = await admin
+      .from("invitations")
+      .select("id")
+      .ilike("email", currentEmail)
+      .maybeSingle();
+
+    if (existingInvitationError) {
+      throw new Error(existingInvitationError.message);
+    }
+
+    if (existingInvitation) {
+      const { error: invitationUpdateError } = await admin
+        .from("invitations")
+        .update({ email, full_name: normalizedFullName })
+        .eq("id", existingInvitation.id);
+
+      if (invitationUpdateError) {
+        throw new Error(invitationUpdateError.message);
+      }
+    } else {
+      const { error: invitationInsertError } = await admin
+        .from("invitations")
+        .insert({
+          email,
+          role: profile.role,
+          full_name: normalizedFullName,
+          invited_by: currentAdmin.id,
+          accepted_at: new Date().toISOString(),
+        });
+
+      if (invitationInsertError) {
+        throw new Error(invitationInsertError.message);
+      }
+    }
+  } else {
+    const invitationEmail = currentEmail ?? email;
+    const { error: invitationSyncError } = await admin
+      .from("invitations")
+      .update({ full_name: normalizedFullName })
+      .ilike("email", invitationEmail);
+
+    if (invitationSyncError) {
+      throw new Error(invitationSyncError.message);
+    }
+  }
+
+  revalidatePath("/admin");
+}
+
 export async function deletePlatformUserAction(formData: FormData) {
   const locale = await getLocale();
   const currentAdmin = await requireRole(["admin"]);
