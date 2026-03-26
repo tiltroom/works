@@ -30,6 +30,12 @@ type AdminListedUser = {
   role: "admin" | "customer" | "worker";
 };
 
+type ProjectTimeRow = {
+  project_id: string;
+  started_at: string;
+  ended_at: string | null;
+};
+
 function tabStyles(isActive: boolean) {
   return isActive
     ? "border-brand-500/40 bg-brand-500/15 text-brand-700 dark:text-brand-300"
@@ -42,6 +48,28 @@ const tableHeadClass = "border-b border-border bg-muted/50 text-xs uppercase tex
 const tableRowClass = "transition-colors hover:bg-accent/60";
 const inputClass = "w-full rounded-lg border border-input bg-background/75 px-4 py-2.5 text-foreground placeholder:text-muted-foreground focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all";
 const multiSelectClass = "w-full rounded-lg border border-input bg-background/75 px-3 py-2.5 text-foreground focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all";
+
+function formatProjectHours(hours: number) {
+  const totalMinutes = Math.max(Math.round(hours * 60), 0);
+
+  return `${totalMinutes} min (${hours.toFixed(2)}h)`;
+}
+
+function formatAssignedRemainingHours(assignedHours: number, remainingHours: number) {
+  return `${formatProjectHours(assignedHours)} / ${formatProjectHours(remainingHours)}`;
+}
+
+function totalUsedHours(entries: ProjectTimeRow[]) {
+  return entries.reduce((total, entry) => {
+    if (!entry.ended_at) {
+      return total;
+    }
+
+    const milliseconds = new Date(entry.ended_at).getTime() - new Date(entry.started_at).getTime();
+
+    return total + Math.max(milliseconds, 0) / 3_600_000;
+  }, 0);
+}
 
 export default async function AdminPage({
   searchParams,
@@ -60,7 +88,7 @@ export default async function AdminPage({
   const deleteUserIdParam = params.deleteUserId;
   const activeTab: AdminTab = tabParam === "projects" || tabParam === "users" ? tabParam : "overview";
 
-  const [{ data: customerProfiles }, { data: customerRates, error: customerRatesError }, { data: workers }, { data: admins }, { data: projects }, { data: invitations }] = await Promise.all([
+  const [{ data: customerProfiles }, { data: customerRates, error: customerRatesError }, { data: workers }, { data: admins }, { data: projects }, { data: projectTimeEntries }, { data: invitations }] = await Promise.all([
     supabase.from("profiles").select("id,full_name,role").eq("role", "customer"),
     supabase.from("profiles").select("id,custom_hourly_rate_cents").eq("role", "customer"),
     supabase.from("profiles").select("id,full_name,role").eq("role", "worker"),
@@ -68,6 +96,7 @@ export default async function AdminPage({
     supabase
       .from("projects")
       .select("id,name,description,assigned_hours,customer_id,profiles!projects_customer_id_fkey(full_name),project_workers(worker_id)"),
+    supabase.from("time_entries").select("project_id,started_at,ended_at"),
     supabase
       .from("invitations")
       .select("id,email,role,full_name,created_at,accepted_at")
@@ -108,6 +137,13 @@ export default async function AdminPage({
 
   const pendingInvitations = (invitations ?? []).filter((invitation) => !invitation.accepted_at);
   const totalAssignedHours = (projects ?? []).reduce((sum, project) => sum + Number(project.assigned_hours ?? 0), 0);
+  const projectTimeEntriesByProjectId = ((projectTimeEntries ?? []) as ProjectTimeRow[]).reduce<Map<string, ProjectTimeRow[]>>((map, entry) => {
+    const existingEntries = map.get(entry.project_id) ?? [];
+    existingEntries.push(entry);
+    map.set(entry.project_id, existingEntries);
+
+    return map;
+  }, new Map());
   const editingProject = (projects ?? []).find((project) => project.id === editProjectIdParam) ?? null;
   const deletingProject = (projects ?? []).find((project) => project.id === deleteProjectIdParam) ?? null;
   const deletingInvitation = pendingInvitations.find((invitation) => invitation.id === deleteInvitationIdParam) ?? null;
@@ -323,7 +359,7 @@ export default async function AdminPage({
                     <tr>
                        <th className="px-4 py-3 font-medium">{t(locale, "Name", "Nome")}</th>
                        <th className="px-4 py-3 font-medium">{t(locale, "Customer", "Cliente")}</th>
-                       <th className="px-4 py-3 font-medium text-right">{t(locale, "Hours", "Ore")}</th>
+                       <th className="px-4 py-3 font-medium text-right">{t(locale, "Assigned / Remaining Hours", "Ore assegnate / Ore rimanenti")}</th>
                        <th className="px-4 py-3 font-medium text-right">{t(locale, "Actions", "Azioni")}</th>
                     </tr>
                   </thead>
@@ -339,7 +375,13 @@ export default async function AdminPage({
                           <td className="px-4 py-3 text-muted-foreground">{(project.profiles as { full_name?: string } | null)?.full_name || t(locale, "Unknown", "Sconosciuto")}</td>
                           <td className="px-4 py-3 text-right">
                             <span className="inline-flex items-center rounded border border-border bg-background/65 px-2 py-0.5 text-xs font-medium text-foreground">
-                              {Number(project.assigned_hours).toFixed(2)}
+                              {formatAssignedRemainingHours(
+                                Number(project.assigned_hours ?? 0),
+                                Math.max(
+                                  Number(project.assigned_hours ?? 0) - totalUsedHours(projectTimeEntriesByProjectId.get(project.id) ?? []),
+                                  0,
+                                ),
+                              )}
                             </span>
                           </td>
                           <td className="px-4 py-3">
