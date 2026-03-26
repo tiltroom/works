@@ -30,6 +30,10 @@ type AdminListedUser = {
   role: "admin" | "customer" | "worker";
 };
 
+type ProjectWorkerAssignment = {
+  worker_id: string;
+};
+
 type ProjectTimeRow = {
   project_id: string;
   started_at: string;
@@ -69,6 +73,17 @@ function totalUsedHours(entries: ProjectTimeRow[]) {
 
     return total + Math.max(milliseconds, 0) / 3_600_000;
   }, 0);
+}
+
+function formatAssignedWorkerNames(
+  assignments: ProjectWorkerAssignment[] | null,
+  workersById: Map<string, string | null>,
+) {
+  const names = (assignments ?? [])
+    .map((assignment) => workersById.get(assignment.worker_id) || assignment.worker_id)
+    .filter(Boolean);
+
+  return names.length > 0 ? names.join(", ") : "—";
 }
 
 export default async function AdminPage({
@@ -134,6 +149,7 @@ export default async function AdminPage({
 
     return leftLabel.localeCompare(rightLabel);
   });
+  const workersById = new Map(((workers ?? []) as AdminListedUser[]).map((worker) => [worker.id, worker.full_name]));
 
   const pendingInvitations = (invitations ?? []).filter((invitation) => !invitation.accepted_at);
   const totalAssignedHours = (projects ?? []).reduce((sum, project) => sum + Number(project.assigned_hours ?? 0), 0);
@@ -149,7 +165,7 @@ export default async function AdminPage({
   const deletingInvitation = pendingInvitations.find((invitation) => invitation.id === deleteInvitationIdParam) ?? null;
   const deletingUser = allUsers.find((user) => user.id === deleteUserIdParam) ?? null;
   const editingProjectWorkerIds = editingProject
-    ? ((editingProject.project_workers as { worker_id: string }[] | null) ?? []).map((assignment) => assignment.worker_id)
+    ? ((editingProject.project_workers as ProjectWorkerAssignment[] | null) ?? []).map((assignment) => assignment.worker_id)
     : [];
 
   return (
@@ -356,23 +372,25 @@ export default async function AdminPage({
               <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left">
                   <thead className={tableHeadClass}>
-                    <tr>
-                       <th className="px-4 py-3 font-medium">{t(locale, "Name", "Nome")}</th>
-                       <th className="px-4 py-3 font-medium">{t(locale, "Customer", "Cliente")}</th>
-                       <th className="px-4 py-3 font-medium text-right">{t(locale, "Assigned / Remaining Hours", "Ore assegnate / Ore rimanenti")}</th>
-                       <th className="px-4 py-3 font-medium text-right">{t(locale, "Actions", "Azioni")}</th>
-                    </tr>
+                     <tr>
+                        <th className="px-4 py-3 font-medium">{t(locale, "Name", "Nome")}</th>
+                        <th className="px-4 py-3 font-medium">{t(locale, "Customer", "Cliente")}</th>
+                        <th className="px-4 py-3 font-medium">{t(locale, "Workers", "Operatori")}</th>
+                        <th className="px-4 py-3 font-medium text-right">{t(locale, "Assigned / Remaining Hours", "Ore assegnate / Ore rimanenti")}</th>
+                        <th className="px-4 py-3 font-medium text-right">{t(locale, "Actions", "Azioni")}</th>
+                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/70">
                     {(projects ?? []).length === 0 ? (
                       <tr>
-                         <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">{t(locale, "No projects found. Create one above.", "Nessun progetto trovato. Creane uno sopra.")}</td>
-                      </tr>
-                    ) : (
-                      (projects ?? []).map((project) => (
+                         <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">{t(locale, "No projects found. Create one above.", "Nessun progetto trovato. Creane uno sopra.")}</td>
+                       </tr>
+                     ) : (
+                       (projects ?? []).map((project) => (
                         <tr key={project.id} className={tableRowClass}>
                           <td className="px-4 py-3 font-medium text-foreground">{project.name}</td>
                           <td className="px-4 py-3 text-muted-foreground">{(project.profiles as { full_name?: string } | null)?.full_name || t(locale, "Unknown", "Sconosciuto")}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{formatAssignedWorkerNames(project.project_workers as ProjectWorkerAssignment[] | null, workersById)}</td>
                           <td className="px-4 py-3 text-right">
                             <span className="inline-flex items-center rounded border border-border bg-background/65 px-2 py-0.5 text-xs font-medium text-foreground">
                               {formatAssignedRemainingHours(
@@ -397,12 +415,12 @@ export default async function AdminPage({
                                 className="rounded-md border border-red-500/40 px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-500/10 dark:text-red-300"
                               >
                                  {t(locale, "Delete", "Elimina")}
-                               </Link>
-                            </div>
-                          </td>
+                                </Link>
+                             </div>
+                           </td>
                         </tr>
-                      ))
-                    )}
+                       ))
+                     )}
                   </tbody>
                 </table>
               </div>
