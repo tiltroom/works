@@ -366,3 +366,73 @@ body {
   background-attachment: fixed;
   min-height: 100vh;
 }
+
+.quotes-rich-text {
+  color: inherit;
+}
+
+.quotes-rich-text p,
+.quotes-rich-text ul,
+.quotes-rich-text ol,
+.quotes-rich-text h2,
+.quotes-rich-text h3,
+.quotes-rich-text blockquote {
+  margin-top: 0.75rem;
+}
+
+.quotes-rich-text > :first-child {
+  margin-top: 0;
+}
+
+.quotes-rich-text > :last-child {
+  margin-bottom: 0;
+}
+
+.quotes-rich-text h2,
+.quotes-rich-text h3 {
+  color: var(--foreground);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.quotes-rich-text h2 {
+  font-size: 1rem;
+}
+
+.quotes-rich-text h3 {
+  font-size: 0.95rem;
+}
+
+.quotes-rich-text ul,
+.quotes-rich-text ol {
+  padding-left: 1.15rem;
+}
+
+.quotes-rich-text ul {
+  list-style: disc;
+}
+
+.quotes-rich-text ol {
+  list-style: decimal;
+}
+
+.quotes-rich-text blockquote {
+  border-left: 2px solid color-mix(in srgb, var(--border) 85%, transparent);
+  padding-left: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.quotes-rich-text img {
+  display: inline-block;
+  max-width: min(100%, 18rem);
+  margin-top: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--background) 82%, white 18%);
+}
+
+.quotes-rich-text a {
+  color: var(--color-brand-600);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}

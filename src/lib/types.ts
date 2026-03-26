@@ -43,3 +43,77 @@ export interface HourPurchase {
   admin_comment: string | null;
   created_at: string;
 }
+
+export type QuoteStatus = "draft" | "signed" | "converted";
+
+export interface Quote {
+  id: string;
+  customer_id: string;
+  title: string;
+  description: string | null;
+  content_html: string | null;
+  content_json: Record<string, unknown> | null;
+  status: QuoteStatus;
+  total_estimated_hours: number;
+  total_logged_hours: number;
+  signed_by_name: string | null;
+  signed_at: string | null;
+  signed_by_user_id: string | null;
+  linked_project_id: string | null;
+  converted_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QuoteWorker {
+  quote_id: string;
+  worker_id: string;
+  assigned_at: string;
+  assigned_by: string | null;
+}
+
+export interface QuoteSubtask {
+  id: string;
+  quote_id: string;
+  title: string;
+  description: string | null;
+  estimated_hours: number;
+  sort_order: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QuoteSubtaskEntry {
+  id: string;
+  quote_subtask_id: string;
+  worker_id: string | null;
+  logged_hours: number;
+  note: string | null;
+  created_at: string;
+}
+
+export interface QuoteComment {
+  id: string;
+  quote_id: string;
+  author_id: string | null;
+  author_role: AppRole;
+  comment_html: string | null;
+  comment_json: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface QuotePrepaymentSession {
+  id: string;
+  quote_id: string;
+  customer_id: string;
+  stripe_checkout_session_id: string;
+  estimated_hours_snapshot: number;
+  amount_cents: number;
+  currency: string;
+  status: "pending" | "paid";
+  stripe_event_id: string | null;
+  paid_at: string | null;
+  created_at: string;
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   THEME_STORAGE_KEY,
   isThemePreference,
@@ -39,59 +39,51 @@ function getStoredTheme(): ThemePreference {
   return "system";
 }
 
-function applyTheme(theme: ThemePreference): ResolvedTheme {
-  const resolvedTheme = theme === "system" ? getSystemTheme() : theme;
+function applyTheme(theme: ThemePreference, resolvedTheme: ResolvedTheme) {
   const root = document.documentElement;
 
   root.setAttribute("data-theme", resolvedTheme);
   root.setAttribute("data-theme-preference", theme);
   root.style.colorScheme = resolvedTheme;
+}
 
-  return resolvedTheme;
+function subscribeToSystemTheme(onStoreChange: () => void) {
+  const mediaQuery = window.matchMedia(SYSTEM_THEME_MEDIA_QUERY);
+  mediaQuery.addEventListener("change", onStoreChange);
+
+  return () => {
+    mediaQuery.removeEventListener("change", onStoreChange);
+  };
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<ThemePreference>("system");
-  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>("light");
+  const [theme, setThemeState] = useState<ThemePreference>(() => getStoredTheme());
+  const systemTheme = useSyncExternalStore(subscribeToSystemTheme, getSystemTheme, (): ResolvedTheme => "light");
+  const resolvedTheme: ResolvedTheme = theme === "system" ? systemTheme : theme;
 
   useEffect(() => {
-    const initialTheme = getStoredTheme();
-    setThemeState(initialTheme);
-    setResolvedTheme(applyTheme(initialTheme));
-
-    const mediaQuery = window.matchMedia(SYSTEM_THEME_MEDIA_QUERY);
-
-    const handleSystemThemeChange = () => {
-      const currentTheme = getStoredTheme();
-
-      if (currentTheme === "system") {
-        setResolvedTheme(applyTheme("system"));
-      }
-    };
-
     const handleStorageChange = (event: StorageEvent) => {
       if (event.key !== null && event.key !== THEME_STORAGE_KEY) {
         return;
       }
 
-      const nextTheme = getStoredTheme();
-      setThemeState(nextTheme);
-      setResolvedTheme(applyTheme(nextTheme));
+      setThemeState(getStoredTheme());
     };
 
-    mediaQuery.addEventListener("change", handleSystemThemeChange);
     window.addEventListener("storage", handleStorageChange);
 
     return () => {
-      mediaQuery.removeEventListener("change", handleSystemThemeChange);
       window.removeEventListener("storage", handleStorageChange);
     };
   }, []);
 
+  useEffect(() => {
+    applyTheme(theme, resolvedTheme);
+  }, [resolvedTheme, theme]);
+
   const setTheme = useCallback((nextTheme: ThemePreference) => {
     window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
     setThemeState(nextTheme);
-    setResolvedTheme(applyTheme(nextTheme));
   }, []);
 
   const value = useMemo(

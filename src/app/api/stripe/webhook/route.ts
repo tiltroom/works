@@ -30,8 +30,45 @@ export async function POST(request: Request) {
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
     const metadata = session.metadata ?? {};
+    const checkoutKind = metadata.checkoutKind ?? "project_hours";
 
     if (session.payment_status !== "paid") {
+      return NextResponse.json({ received: true });
+    }
+
+    if (checkoutKind === "quote_conversion") {
+      const quoteId = metadata.quoteId;
+      const customerId = metadata.customerId;
+      const amountCents = Number(metadata.amountCents ?? "0");
+      const currency = metadata.currency ?? env.stripeCurrency;
+
+      if (
+        Number.isNaN(amountCents)
+        || amountCents <= 0
+        || session.amount_total !== amountCents
+        || (session.currency ?? "").toLowerCase() !== currency.toLowerCase()
+      ) {
+        return NextResponse.json({ error: "Invalid quote checkout metadata" }, { status: 400 });
+      }
+
+      if (!quoteId || !customerId) {
+        return NextResponse.json({ error: "Missing quote checkout metadata" }, { status: 400 });
+      }
+
+      const admin = createAdminClient();
+      const { error } = await admin.rpc("apply_quote_conversion_payment", {
+        p_event_id: event.id,
+        p_quote_id: quoteId,
+        p_customer_id: customerId,
+        p_checkout_session_id: session.id,
+        p_amount_cents: amountCents,
+        p_currency: currency,
+      });
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
       return NextResponse.json({ received: true });
     }
 
@@ -43,14 +80,14 @@ export async function POST(request: Request) {
     const currency = metadata.currency ?? env.stripeCurrency;
 
     if (
-      Number.isNaN(hoursToBuy) ||
-      Number.isNaN(unitAmountCents) ||
-      Number.isNaN(amountCents) ||
-      unitAmountCents <= 0 ||
-      amountCents <= 0 ||
-      unitAmountCents * hoursToBuy !== amountCents ||
-      session.amount_total !== amountCents ||
-      (session.currency ?? "").toLowerCase() !== currency.toLowerCase()
+      Number.isNaN(hoursToBuy)
+      || Number.isNaN(unitAmountCents)
+      || Number.isNaN(amountCents)
+      || unitAmountCents <= 0
+      || amountCents <= 0
+      || unitAmountCents * hoursToBuy !== amountCents
+      || session.amount_total !== amountCents
+      || (session.currency ?? "").toLowerCase() !== currency.toLowerCase()
     ) {
       return NextResponse.json({ error: "Invalid checkout metadata" }, { status: 400 });
     }

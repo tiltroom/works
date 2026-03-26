@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import { useTheme } from "@/components/theme-provider";
 import { t, type Locale } from "@/lib/i18n";
 import type { ThemePreference } from "@/lib/theme";
@@ -15,13 +15,13 @@ interface ThemeOption {
   icon: React.ReactNode;
 }
 
+function subscribeToClientReady() {
+  return () => {};
+}
+
 export function ThemeSwitcher({ locale }: ThemeSwitcherProps) {
   const { resolvedTheme, setTheme, theme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(subscribeToClientReady, () => true, () => false);
 
   const options = useMemo<ThemeOption[]>(
     () => [

@@ -5,6 +5,7 @@ export const env = {
   stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? "",
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
   appUrl: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
+  quotesUploadsBucket: process.env.QUOTES_UPLOADS_BUCKET ?? "quotes-assets",
   stripePricePerHourCents: Number(process.env.STRIPE_PRICE_PER_HOUR_CENTS ?? "5000"),
   stripeCurrency: process.env.STRIPE_CURRENCY ?? "usd",
 };

@@ -3,6 +3,7 @@ import { LogoutButton } from "@/components/logout-button";
 import { hoursToMinutesWithHoursDisplay, loggedHoursBetween } from "@/lib/time";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import Link from "next/link";
 import { localeTag, t } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n-server";
 import { RecentActivityToggle } from "./recent-activity-toggle";
@@ -116,7 +117,12 @@ export default async function CustomerPage() {
           </h1>
           <p className="mt-1 text-muted-foreground">{t(locale, "Monitor project progress, track hours used, and manage billing.", "Monitora l'avanzamento dei progetti, le ore utilizzate e la fatturazione.")}</p>
         </div>
-        <LogoutButton />
+        <div className="flex items-center gap-2">
+          <Link href="/customer/quotes" className="rounded-lg border border-brand-500/30 bg-brand-500/10 px-4 py-2 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-500/20 dark:text-brand-300">
+            {t(locale, "Quotes", "Preventivi")}
+          </Link>
+          <LogoutButton />
+        </div>
       </header>
 
       <section className="space-y-6">

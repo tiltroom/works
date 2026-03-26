@@ -83,6 +83,7 @@ export async function createCheckoutForHoursAction(formData: FormData) {
     success_url: `${env.appUrl}/customer?billing=success`,
     cancel_url: `${env.appUrl}/customer?billing=cancelled`,
     metadata: {
+      checkoutKind: "project_hours",
       projectId: project.id,
       customerId: profile.id,
       hoursToBuy: String(hoursToBuy),

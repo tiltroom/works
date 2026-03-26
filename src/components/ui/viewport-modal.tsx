@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
 function joinClasses(...values: Array<string | false | null | undefined>) {
@@ -17,12 +17,12 @@ interface ViewportModalPanelProps {
   className?: string;
 }
 
-export function ViewportModal({ children, className }: ViewportModalProps) {
-  const [mounted, setMounted] = useState(false);
+function subscribeToClientReady() {
+  return () => {};
+}
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+export function ViewportModal({ children, className }: ViewportModalProps) {
+  const mounted = useSyncExternalStore(subscribeToClientReady, () => true, () => false);
 
   if (!mounted) {
     return null;

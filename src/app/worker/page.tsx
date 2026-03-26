@@ -190,7 +190,12 @@ export default async function WorkerPage({
           </h1>
           <p className="mt-1 text-muted-foreground">{t(locale, "Track your time, manage active sessions, and log hours.", "Monitora il tuo tempo, gestisci le sessioni attive e registra le ore.")}</p>
         </div>
-        <LogoutButton />
+        <div className="flex items-center gap-2">
+          <Link href="/worker/quotes" className="rounded-lg border border-brand-500/30 bg-brand-500/10 px-4 py-2 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-500/20 dark:text-brand-300">
+            {t(locale, "Quotes", "Preventivi")}
+          </Link>
+          <LogoutButton />
+        </div>
       </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">

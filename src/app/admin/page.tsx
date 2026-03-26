@@ -252,7 +252,12 @@ export default async function AdminPage({
           </h1>
           <p className="mt-1 text-muted-foreground">{t(locale, "Overview first, then manage projects and users from focused tabs.", "Prima panoramica, poi gestione di progetti e utenti dalle schede dedicate.")}</p>
         </div>
-        <LogoutButton />
+        <div className="flex items-center gap-2">
+          <Link href="/admin/quotes" className="rounded-lg border border-brand-500/30 bg-brand-500/10 px-4 py-2 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-500/20 dark:text-brand-300">
+            {t(locale, "Quotes", "Preventivi")}
+          </Link>
+          <LogoutButton />
+        </div>
       </header>
 
       <div className="mb-8 grid grid-cols-1 gap-2 rounded-2xl border border-border bg-card/60 p-2 sm:grid-cols-3">
