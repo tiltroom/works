@@ -310,14 +310,16 @@ export default async function CustomerPage() {
                         const amountLabel = purchase.payment_method === "manual" || purchase.amount_cents == null || !purchase.currency
                           ? "—"
                           : `${(purchase.amount_cents / 100).toFixed(2)} ${purchase.currency.toUpperCase()}`;
-                        const isPositiveAdjustment = Number(purchase.hours_added) > 0;
+                        const hoursAdded = Number(purchase.hours_added);
+                        const isPositiveAdjustment = hoursAdded > 0;
+                        const hoursAddedDisplay = `${hoursAdded > 0 ? "+" : hoursAdded < 0 ? "-" : ""}${hoursToMinutesWithHoursDisplay(Math.abs(hoursAdded))}`;
 
                         return (
                         <tr key={purchase.id} className={tableRowClass}>
                           <td className="px-4 py-3 font-medium text-foreground">{projectName}</td>
                           <td className="px-4 py-3">
                             <span className={`inline-flex items-center rounded border px-2 py-0.5 text-xs font-medium ${isPositiveAdjustment ? "border-green-500/20 bg-green-500/10 text-green-700 dark:text-green-300" : "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}>
-                              {Number(purchase.hours_added) > 0 ? "+" : ""}{Number(purchase.hours_added).toFixed(2)}h
+                              {hoursAddedDisplay}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-muted-foreground">{methodLabel}</td>
