@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { requireRole } from "@/lib/auth";
+import { getCurrentUser, requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import { getStripeClient } from "@/lib/stripe";
@@ -11,6 +11,7 @@ import { getLocale } from "@/lib/i18n-server";
 export async function createCheckoutForHoursAction(formData: FormData) {
   const locale = await getLocale();
   const profile = await requireRole(["customer"]);
+  const user = await getCurrentUser();
 
   const projectId = String(formData.get("projectId") ?? "").trim();
   const hoursToBuy = Number(formData.get("hoursToBuy") ?? "0");
@@ -60,6 +61,12 @@ export async function createCheckoutForHoursAction(formData: FormData) {
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
+    customer_email: user?.email ?? undefined,
+    billing_address_collection: "required",
+    tax_id_collection: {
+      enabled: true,
+      required: "if_supported",
+    },
     line_items: [
       {
         quantity: 1,
