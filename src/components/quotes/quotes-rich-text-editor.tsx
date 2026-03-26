@@ -60,6 +60,7 @@ export function QuotesRichTextEditor({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   const content = useMemo(() => {
     if (initialJson) {
@@ -72,6 +73,8 @@ export function QuotesRichTextEditor({
 
     return createEmptyDoc();
   }, [initialHtml, initialJson]);
+
+  const serializedInitialJson = useMemo(() => JSON.stringify(content), [content]);
 
   const editor = useEditor({
     extensions: [
@@ -111,6 +114,41 @@ export function QuotesRichTextEditor({
 
     editor.setEditable(!disabled);
   }, [disabled, editor]);
+
+  useEffect(() => {
+    if (!editor) {
+      return;
+    }
+
+    editor.commands.setContent(content);
+    setHtmlValue(editor.getHTML());
+    setJsonValue(JSON.stringify(editor.getJSON()));
+    setErrorMessage(null);
+  }, [content, editor, serializedInitialJson]);
+
+  useEffect(() => {
+    const form = containerRef.current?.closest("form");
+
+    if (!form || !editor) {
+      return;
+    }
+
+    const activeEditor = editor;
+
+    function handleFormReset() {
+      activeEditor.commands.setContent(content);
+      setHtmlValue(activeEditor.getHTML());
+      setJsonValue(JSON.stringify(activeEditor.getJSON()));
+      setErrorMessage(null);
+      setIsUploading(false);
+    }
+
+    form.addEventListener("reset", handleFormReset);
+
+    return () => {
+      form.removeEventListener("reset", handleFormReset);
+    };
+  }, [content, editor, serializedInitialJson]);
 
   async function handleImageSelection(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -158,7 +196,7 @@ export function QuotesRichTextEditor({
 
   return (
     <QuotesCompactField label={label} htmlFor={`${name}-editor`} hint={helpText}>
-      <div className="space-y-2">
+      <div ref={containerRef} className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
