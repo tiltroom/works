@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition, useState } from "react";
+import { ViewportModal, ViewportModalPanel } from "@/components/ui/viewport-modal";
 
 interface StopTimerButtonProps {
   timeEntryId: string;
@@ -51,8 +52,8 @@ export function StopTimerButton({ timeEntryId, stopTimerAction, labels }: StopTi
       </button>
 
       {error && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-          <div className="animate-in fade-in zoom-in-95 w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card shadow-2xl duration-200">
+        <ViewportModal>
+          <ViewportModalPanel className="max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b border-border bg-muted/35 px-5 py-4">
               <h3 className="flex items-center gap-2 text-lg font-semibold text-foreground">
                 <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -85,8 +86,8 @@ export function StopTimerButton({ timeEntryId, stopTimerAction, labels }: StopTi
                 </button>
               </div>
             </div>
-          </div>
-        </div>
+          </ViewportModalPanel>
+        </ViewportModal>
       )}
     </>
   );

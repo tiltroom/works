@@ -4,6 +4,7 @@ import { WorkerQueryToast } from "@/components/worker/worker-query-toast";
 import { LogoutButton } from "@/components/logout-button";
 import Link from "next/link";
 import { TimerCard } from "@/components/worker/timer-card";
+import { ViewportModal, ViewportModalPanel } from "@/components/ui/viewport-modal";
 import { StopTimerButton } from "@/components/worker/stop-timer-button";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -499,8 +500,8 @@ export default async function WorkerPage({
         )}
 
         {activeDeleteEntry && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl">
+          <ViewportModal>
+            <ViewportModalPanel className="max-w-md">
               <div className="border-b border-border px-5 py-4">
                 <h3 className="text-lg font-semibold text-foreground">{t(locale, "Confirm Deletion", "Conferma eliminazione")}</h3>
               </div>
@@ -522,8 +523,8 @@ export default async function WorkerPage({
                   </form>
                 </div>
               </div>
-            </div>
-          </div>
+            </ViewportModalPanel>
+          </ViewportModal>
         )}
       </div>
     </main>

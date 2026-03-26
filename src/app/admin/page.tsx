@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { LogoutButton } from "@/components/logout-button";
+import { ViewportModal, ViewportModalPanel } from "@/components/ui/viewport-modal";
 import Link from "next/link";
 import { t } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n-server";
@@ -448,8 +449,8 @@ export default async function AdminPage({
             </div>
 
             {editingProject && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-                <div className="w-full max-w-2xl rounded-2xl border border-border bg-card shadow-2xl">
+              <ViewportModal>
+                <ViewportModalPanel className="max-w-2xl">
                   <div className="flex items-center justify-between border-b border-border px-5 py-4">
                      <h3 className="text-lg font-semibold text-foreground">{t(locale, "Edit Project", "Modifica progetto")}</h3>
                     <Link href="/admin?tab=projects" className="rounded-md border border-border bg-background/60 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
@@ -526,13 +527,13 @@ export default async function AdminPage({
                        </button>
                     </div>
                   </form>
-                </div>
-              </div>
+                </ViewportModalPanel>
+              </ViewportModal>
             )}
 
             {deletingProject && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-                <div className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl">
+              <ViewportModal>
+                <ViewportModalPanel className="max-w-md">
                   <div className="border-b border-border px-5 py-4">
                      <h3 className="text-lg font-semibold text-foreground">{t(locale, "Confirm Deletion", "Conferma eliminazione")}</h3>
                   </div>
@@ -554,8 +555,8 @@ export default async function AdminPage({
                        </form>
                     </div>
                   </div>
-                </div>
-              </div>
+                </ViewportModalPanel>
+              </ViewportModal>
             )}
           </section>
         </section>
@@ -768,8 +769,8 @@ export default async function AdminPage({
             </div>
 
             {editingUser && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-                <div className="w-full max-w-xl rounded-2xl border border-border bg-card shadow-2xl">
+              <ViewportModal>
+                <ViewportModalPanel className="max-w-xl">
                   <div className="flex items-center justify-between border-b border-border px-5 py-4">
                     <h3 className="text-lg font-semibold text-foreground">{t(locale, "Edit User", "Modifica utente")}</h3>
                     <Link href="/admin?tab=users" className="rounded-md border border-border bg-background/60 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
@@ -817,13 +818,13 @@ export default async function AdminPage({
                       </button>
                     </div>
                   </form>
-                </div>
-              </div>
+                </ViewportModalPanel>
+              </ViewportModal>
             )}
 
             {deletingUser && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-                <div className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl">
+              <ViewportModal>
+                <ViewportModalPanel className="max-w-md">
                   <div className="border-b border-border px-5 py-4">
                     <h3 className="text-lg font-semibold text-foreground">{t(locale, "Confirm Deletion", "Conferma eliminazione")}</h3>
                   </div>
@@ -850,8 +851,8 @@ export default async function AdminPage({
                       </form>
                     </div>
                   </div>
-                </div>
-              </div>
+                </ViewportModalPanel>
+              </ViewportModal>
             )}
           </section>
 
@@ -922,8 +923,8 @@ export default async function AdminPage({
             </div>
 
             {deletingInvitation && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-                <div className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl">
+              <ViewportModal>
+                <ViewportModalPanel className="max-w-md">
                   <div className="border-b border-border px-5 py-4">
                     <h3 className="text-lg font-semibold text-foreground">{t(locale, "Confirm Deletion", "Conferma eliminazione")}</h3>
                   </div>
@@ -950,8 +951,8 @@ export default async function AdminPage({
                       </form>
                     </div>
                   </div>
-                </div>
-              </div>
+                </ViewportModalPanel>
+              </ViewportModal>
             )}
           </section>
         </section>

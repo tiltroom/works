@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { ViewportModal, ViewportModalPanel } from "@/components/ui/viewport-modal";
 import { DismissibleToast } from "@/components/worker/dismissible-toast";
 
 interface EditProjectOption {
@@ -98,8 +99,8 @@ export function EditTimeEntryModal({
         />
       )}
 
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-        <div className="w-full max-w-2xl rounded-2xl border border-border bg-card shadow-2xl">
+      <ViewportModal>
+        <ViewportModalPanel className="max-w-2xl">
           <div className="flex items-center justify-between border-b border-border px-5 py-4">
             <h3 className="text-lg font-semibold text-foreground">{labels.title}</h3>
             <Link href={closeHref} className="rounded-md border border-border bg-background/60 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
@@ -185,8 +186,8 @@ export function EditTimeEntryModal({
               </button>
             </div>
           </form>
-        </div>
-      </div>
+        </ViewportModalPanel>
+      </ViewportModal>
     </>
   );
 }
