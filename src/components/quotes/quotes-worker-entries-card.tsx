@@ -78,13 +78,17 @@ interface QuotesWorkerEntryFormProps {
   estimateLabel: string;
   estimateName?: string;
   estimateId?: string;
+  estimateDefaultValue?: string | number;
   loggedLabel?: string;
   loggedName?: string;
   loggedId?: string;
+  loggedDefaultValue?: string | number;
   noteLabel?: string;
   noteName?: string;
   noteId?: string;
+  noteDefaultValue?: string;
   submitLabel: string;
+  showSubmitButton?: boolean;
   footer?: ReactNode;
 }
 
@@ -92,13 +96,17 @@ export function QuotesWorkerEntryForm({
   estimateLabel,
   estimateName = "estimatedHours",
   estimateId = "quotes-worker-estimate",
+  estimateDefaultValue,
   loggedLabel,
   loggedName = "loggedHours",
   loggedId = "quotes-worker-logged",
+  loggedDefaultValue,
   noteLabel,
   noteName = "note",
   noteId = "quotes-worker-note",
+  noteDefaultValue,
   submitLabel,
+  showSubmitButton = true,
   footer,
 }: QuotesWorkerEntryFormProps) {
   return (
@@ -108,7 +116,7 @@ export function QuotesWorkerEntryForm({
           <label htmlFor={estimateId} className="text-sm font-medium text-foreground">
             {estimateLabel}
           </label>
-          <input id={estimateId} name={estimateName} type="number" min="0" step="0.25" className={quotesInputClass} />
+          <input id={estimateId} name={estimateName} type="number" min="0" step="0.25" defaultValue={estimateDefaultValue} className={quotesInputClass} />
         </div>
 
         {loggedLabel ? (
@@ -116,7 +124,7 @@ export function QuotesWorkerEntryForm({
             <label htmlFor={loggedId} className="text-sm font-medium text-foreground">
               {loggedLabel}
             </label>
-            <input id={loggedId} name={loggedName} type="number" min="0" step="0.25" className={quotesInputClass} />
+            <input id={loggedId} name={loggedName} type="number" min="0" step="0.25" defaultValue={loggedDefaultValue} className={quotesInputClass} />
           </div>
         ) : null}
 
@@ -125,18 +133,20 @@ export function QuotesWorkerEntryForm({
             <label htmlFor={noteId} className="text-sm font-medium text-foreground">
               {noteLabel}
             </label>
-            <textarea id={noteId} name={noteName} rows={3} className={quotesTextareaClass} />
+            <textarea id={noteId} name={noteName} rows={3} defaultValue={noteDefaultValue} className={quotesTextareaClass} />
           </div>
         ) : null}
       </div>
 
       {footer ? <div>{footer}</div> : null}
 
-      <div className="flex justify-end">
-        <button type="submit" className={quotesPrimaryButtonClass}>
-          {submitLabel}
-        </button>
-      </div>
+      {showSubmitButton ? (
+        <div className="flex justify-end">
+          <button type="submit" className={quotesPrimaryButtonClass}>
+            {submitLabel}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

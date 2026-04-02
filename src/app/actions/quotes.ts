@@ -40,9 +40,12 @@ interface QuotesPageData {
 
 type RawRow = Record<string, unknown>;
 
-function revalidateQuotesModule() {
+function revalidateQuotesModule(quoteId?: string) {
   revalidatePath("/admin");
   revalidatePath("/admin/quotes");
+  if (quoteId) {
+    revalidatePath(`/admin/quotes/${quoteId}`);
+  }
   revalidatePath("/customer");
   revalidatePath("/customer/quotes");
   revalidatePath("/worker");
@@ -156,6 +159,69 @@ async function assertWorkerAccessToQuote(quoteId: string, workerId: string) {
   }
 
   return { supabase, quote: parseQuoteRecord(quoteResult.data) };
+}
+
+async function getQuoteSubtaskForQuote(quoteId: string, quoteSubtaskId: string) {
+  const locale = await getLocale();
+  const supabase = await assertQuotesBackend();
+  const { data, error } = await supabase
+    .from("quote_subtasks")
+    .select("id,quote_id")
+    .eq("id", quoteSubtaskId)
+    .eq("quote_id", quoteId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data) {
+    throw new Error(t(locale, "Subtask not found", "Sottoattività non trovata"));
+  }
+
+  return data;
+}
+
+async function getQuoteSubtaskForAdmin(quoteId: string, subtaskId: string) {
+  const locale = await getLocale();
+  const supabase = await assertQuotesBackend();
+  const { data, error } = await supabase
+    .from("quote_subtasks")
+    .select("id,quote_id")
+    .eq("id", subtaskId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data || String(data.quote_id) !== quoteId) {
+    throw new Error(t(locale, "Subtask not found", "Sottoattività non trovata"));
+  }
+
+  return data;
+}
+
+async function getQuoteSubtaskEntryForAdmin(quoteId: string, entryId: string) {
+  const locale = await getLocale();
+  const supabase = await assertQuotesBackend();
+  const { data, error } = await supabase
+    .from("quote_subtask_entries")
+    .select("id,quote_subtask_id")
+    .eq("id", entryId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data) {
+    throw new Error(t(locale, "Logged entry not found", "Voce registrata non trovata"));
+  }
+
+  await getQuoteSubtaskForQuote(quoteId, String(data.quote_subtask_id));
+
+  return data;
 }
 
 export async function loadQuotesPageData(role: AppRole, profileId: string): Promise<QuotesPageData> {
@@ -412,7 +478,7 @@ export async function updateQuoteDraftAction(formData: FormData) {
     throw new Error(error.message);
   }
 
-  revalidateQuotesModule();
+  revalidateQuotesModule(quoteId);
 }
 
 export async function deleteQuoteDraftAction(formData: FormData) {
@@ -440,7 +506,7 @@ export async function deleteQuoteDraftAction(formData: FormData) {
     throw new Error(error.message);
   }
 
-  revalidateQuotesModule();
+  revalidateQuotesModule(quoteId);
 }
 
 export async function assignQuoteWorkersAction(formData: FormData) {
@@ -483,7 +549,7 @@ export async function assignQuoteWorkersAction(formData: FormData) {
     }
   }
 
-  revalidateQuotesModule();
+  revalidateQuotesModule(quoteId);
 }
 
 export async function addQuoteCommentAction(formData: FormData) {
@@ -525,7 +591,7 @@ export async function addQuoteCommentAction(formData: FormData) {
     throw new Error(error.message);
   }
 
-  revalidateQuotesModule();
+  revalidateQuotesModule(quoteId);
 }
 
 export async function addQuoteWorkerCommentAction(formData: FormData) {
@@ -583,11 +649,76 @@ export async function addQuoteSubtaskAction(formData: FormData) {
     throw new Error(error.message);
   }
 
-  revalidateQuotesModule();
+  revalidateQuotesModule(quoteId);
 }
 
 export async function addQuoteSubtaskEstimateAction(formData: FormData) {
   return addQuoteSubtaskAction(formData);
+}
+
+export async function updateQuoteSubtaskAction(formData: FormData) {
+  const locale = await getLocale();
+  await requireRole(["admin"]);
+  const quoteId = trimString(formData, "quoteId");
+  const subtaskId = trimString(formData, "subtaskId");
+  const title = trimString(formData, "title");
+  const description = trimString(formData, "description") || trimString(formData, "note");
+  const estimatedHours = parseNumber(trimString(formData, "estimatedHours"));
+
+  if (!quoteId || !subtaskId || !title || Number.isNaN(estimatedHours) || estimatedHours < 0) {
+    throw new Error(t(locale, "Subtask title and estimated hours are required", "Titolo della sottoattività e ore stimate sono obbligatori"));
+  }
+
+  const existing = await getQuoteForAdmin(quoteId);
+  if (existing.status !== "draft") {
+    throw new Error(t(locale, "Subtasks can only be edited while the quote is in draft", "Le sottoattività possono essere modificate solo mentre il preventivo è in bozza"));
+  }
+
+  await getQuoteSubtaskForAdmin(quoteId, subtaskId);
+
+  const supabase = await assertQuotesBackend();
+  const { error } = await supabase
+    .from("quote_subtasks")
+    .update({
+      title,
+      description: description || null,
+      estimated_hours: estimatedHours,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", subtaskId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  revalidateQuotesModule(quoteId);
+}
+
+export async function deleteQuoteSubtaskAction(formData: FormData) {
+  const locale = await getLocale();
+  await requireRole(["admin"]);
+  const quoteId = trimString(formData, "quoteId");
+  const subtaskId = trimString(formData, "subtaskId");
+
+  if (!quoteId || !subtaskId) {
+    throw new Error(t(locale, "Invalid subtask payload", "Payload sottoattività non valido"));
+  }
+
+  const existing = await getQuoteForAdmin(quoteId);
+  if (existing.status !== "draft") {
+    throw new Error(t(locale, "Subtasks can only be deleted while the quote is in draft", "Le sottoattività possono essere eliminate solo mentre il preventivo è in bozza"));
+  }
+
+  await getQuoteSubtaskForAdmin(quoteId, subtaskId);
+
+  const supabase = await assertQuotesBackend();
+  const { error } = await supabase.from("quote_subtasks").delete().eq("id", subtaskId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  revalidateQuotesModule(quoteId);
 }
 
 export async function addQuoteSubtaskEntryAction(formData: FormData) {
@@ -615,24 +746,11 @@ export async function addQuoteSubtaskEntryAction(formData: FormData) {
   }
 
   const supabase = await assertQuotesBackend();
-  const { data: subtask, error: subtaskError } = await supabase
-    .from("quote_subtasks")
-    .select("id,quote_id")
-    .eq("id", quoteSubtaskId)
-    .eq("quote_id", quoteId)
-    .maybeSingle();
-
-  if (subtaskError) {
-    throw new Error(subtaskError.message);
-  }
-
-  if (!subtask) {
-    throw new Error(t(locale, "Subtask not found", "Sottoattività non trovata"));
-  }
+  await getQuoteSubtaskForQuote(quoteId, quoteSubtaskId);
 
   const { error } = await supabase.from("quote_subtask_entries").insert({
     quote_subtask_id: quoteSubtaskId,
-    worker_id: profile.role === "worker" ? profile.id : null,
+    worker_id: profile.id,
     logged_hours: loggedHours,
     note: note || null,
   });
@@ -641,11 +759,77 @@ export async function addQuoteSubtaskEntryAction(formData: FormData) {
     throw new Error(error.message);
   }
 
-  revalidateQuotesModule();
+  revalidateQuotesModule(quoteId);
 }
 
 export async function addQuoteLoggedHourAction(formData: FormData) {
   return addQuoteSubtaskEntryAction(formData);
+}
+
+export async function updateQuoteSubtaskEntryAction(formData: FormData) {
+  const locale = await getLocale();
+  await requireRole(["admin"]);
+  const quoteId = trimString(formData, "quoteId");
+  const entryId = trimString(formData, "entryId");
+  const quoteSubtaskId = trimString(formData, "quoteSubtaskId");
+  const loggedHours = parseNumber(trimString(formData, "loggedHours"));
+  const note = trimString(formData, "note");
+
+  if (!quoteId || !entryId || !quoteSubtaskId || Number.isNaN(loggedHours) || loggedHours <= 0) {
+    throw new Error(t(locale, "Subtask and logged hours are required", "Sottoattività e ore registrate sono obbligatorie"));
+  }
+
+  const existing = await getQuoteForAdmin(quoteId);
+  if (existing.status !== "draft") {
+    throw new Error(t(locale, "Logged entries can only be edited while the quote is in draft", "Le voci registrate possono essere modificate solo mentre il preventivo è in bozza"));
+  }
+
+  await getQuoteSubtaskEntryForAdmin(quoteId, entryId);
+  await getQuoteSubtaskForQuote(quoteId, quoteSubtaskId);
+
+  const supabase = await assertQuotesBackend();
+  const { error } = await supabase
+    .from("quote_subtask_entries")
+    .update({
+      quote_subtask_id: quoteSubtaskId,
+      logged_hours: loggedHours,
+      note: note || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", entryId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  revalidateQuotesModule(quoteId);
+}
+
+export async function deleteQuoteSubtaskEntryAction(formData: FormData) {
+  const locale = await getLocale();
+  await requireRole(["admin"]);
+  const quoteId = trimString(formData, "quoteId");
+  const entryId = trimString(formData, "entryId");
+
+  if (!quoteId || !entryId) {
+    throw new Error(t(locale, "Invalid logged entry payload", "Payload voce registrata non valido"));
+  }
+
+  const existing = await getQuoteForAdmin(quoteId);
+  if (existing.status !== "draft") {
+    throw new Error(t(locale, "Logged entries can only be deleted while the quote is in draft", "Le voci registrate possono essere eliminate solo mentre il preventivo è in bozza"));
+  }
+
+  await getQuoteSubtaskEntryForAdmin(quoteId, entryId);
+
+  const supabase = await assertQuotesBackend();
+  const { error } = await supabase.from("quote_subtask_entries").delete().eq("id", entryId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  revalidateQuotesModule(quoteId);
 }
 
 export async function confirmQuoteAction(formData: FormData) {
@@ -675,7 +859,7 @@ export async function confirmQuoteAction(formData: FormData) {
     throw new Error(error.message);
   }
 
-  revalidateQuotesModule();
+  revalidateQuotesModule(quoteId);
 }
 
 export async function signQuoteAction(formData: FormData) {

@@ -61,6 +61,7 @@ export interface QuoteSubtaskEntryRecord {
   loggedHours: number;
   note: string | null;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface QuoteCommentRecord {
@@ -222,6 +223,7 @@ export function parseQuoteSubtaskEntryRecord(row: RawRecord): QuoteSubtaskEntryR
     loggedHours: asNumber(row.logged_hours),
     note: asNullableString(row.note),
     createdAt: asString(row.created_at),
+    updatedAt: asString(row.updated_at, asString(row.created_at)),
   };
 }
 

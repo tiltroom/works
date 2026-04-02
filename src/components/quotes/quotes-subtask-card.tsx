@@ -86,17 +86,21 @@ interface QuotesSubtaskFormProps {
   titleLabel: string;
   titleName?: string;
   titleId?: string;
+  titleDefaultValue?: string;
   descriptionLabel: string;
   descriptionName?: string;
   descriptionId?: string;
+  descriptionDefaultValue?: string;
   estimateLabel: string;
   estimateName?: string;
   estimateId?: string;
+  estimateDefaultValue?: string | number;
   assigneeLabel?: string;
   assigneeName?: string;
   assigneeId?: string;
   assigneeOptions?: Array<{ label: string; value: string }>;
   submitLabel: string;
+  showSubmitButton?: boolean;
   footer?: ReactNode;
 }
 
@@ -104,17 +108,21 @@ export function QuotesSubtaskForm({
   titleLabel,
   titleName = "title",
   titleId = "quotes-subtask-title",
+  titleDefaultValue,
   descriptionLabel,
   descriptionName = "description",
   descriptionId = "quotes-subtask-description",
+  descriptionDefaultValue,
   estimateLabel,
   estimateName = "estimatedHours",
   estimateId = "quotes-subtask-estimate",
+  estimateDefaultValue,
   assigneeLabel,
   assigneeName = "workerId",
   assigneeId = "quotes-subtask-assignee",
   assigneeOptions = [],
   submitLabel,
+  showSubmitButton = true,
   footer,
 }: QuotesSubtaskFormProps) {
   return (
@@ -124,21 +132,21 @@ export function QuotesSubtaskForm({
           <label htmlFor={titleId} className="text-sm font-medium text-foreground">
             {titleLabel}
           </label>
-          <input id={titleId} name={titleName} className={quotesInputClass} />
+          <input id={titleId} name={titleName} defaultValue={titleDefaultValue} className={quotesInputClass} />
         </div>
 
         <div className="space-y-1.5 md:col-span-2">
           <label htmlFor={descriptionId} className="text-sm font-medium text-foreground">
             {descriptionLabel}
           </label>
-          <textarea id={descriptionId} name={descriptionName} rows={3} className={quotesTextareaClass} />
+          <textarea id={descriptionId} name={descriptionName} rows={3} defaultValue={descriptionDefaultValue} className={quotesTextareaClass} />
         </div>
 
         <div className="space-y-1.5">
           <label htmlFor={estimateId} className="text-sm font-medium text-foreground">
             {estimateLabel}
           </label>
-          <input id={estimateId} name={estimateName} type="number" min="0" step="0.25" className={quotesInputClass} />
+          <input id={estimateId} name={estimateName} type="number" min="0" step="0.25" defaultValue={estimateDefaultValue} className={quotesInputClass} />
         </div>
 
         {assigneeLabel ? (
@@ -160,11 +168,13 @@ export function QuotesSubtaskForm({
 
       {footer ? <div>{footer}</div> : null}
 
-      <div className="flex justify-end">
-        <button type="submit" className={quotesPrimaryButtonClass}>
-          {submitLabel}
-        </button>
-      </div>
+      {showSubmitButton ? (
+        <div className="flex justify-end">
+          <button type="submit" className={quotesPrimaryButtonClass}>
+            {submitLabel}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
