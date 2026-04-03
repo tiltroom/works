@@ -30,7 +30,11 @@ export async function POST(request: Request) {
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
     const metadata = session.metadata ?? {};
-    const checkoutKind = metadata.checkoutKind ?? "project_hours";
+    const checkoutKind = metadata.checkoutKind;
+
+    if (checkoutKind !== "project_hours" && checkoutKind !== "quote_conversion") {
+      return NextResponse.json({ error: "Invalid checkout kind" }, { status: 400 });
+    }
 
     if (session.payment_status !== "paid") {
       return NextResponse.json({ received: true });
@@ -92,21 +96,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid checkout metadata" }, { status: 400 });
     }
 
-    if (projectId && customerId && hoursToBuy > 0) {
-      const admin = createAdminClient();
-      const { error } = await admin.rpc("apply_hour_purchase", {
-        p_event_id: event.id,
-        p_project_id: projectId,
-        p_customer_id: customerId,
-        p_hours_added: hoursToBuy,
-        p_checkout_session_id: session.id,
-        p_amount_cents: amountCents,
-        p_currency: currency,
-      });
+    if (!projectId || !customerId) {
+      return NextResponse.json({ error: "Missing project checkout metadata" }, { status: 400 });
+    }
 
-      if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-      }
+    const admin = createAdminClient();
+    const { error } = await admin.rpc("apply_hour_purchase", {
+      p_event_id: event.id,
+      p_project_id: projectId,
+      p_customer_id: customerId,
+      p_hours_added: hoursToBuy,
+      p_checkout_session_id: session.id,
+      p_amount_cents: amountCents,
+      p_currency: currency,
+    });
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
   }
 

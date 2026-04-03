@@ -941,17 +941,6 @@ export async function createCheckoutForQuotePrepaymentAction(formData: FormData)
     throw new Error(t(locale, "Invalid prepayment amount", "Importo prepagamento non valido"));
   }
 
-  const { error: cleanupError } = await supabase
-    .from("quote_prepayment_sessions")
-    .delete()
-    .eq("quote_id", quoteId)
-    .eq("customer_id", profile.id)
-    .eq("status", "pending");
-
-  if (cleanupError) {
-    throw new Error(cleanupError.message);
-  }
-
   const stripe = getStripeClient();
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
