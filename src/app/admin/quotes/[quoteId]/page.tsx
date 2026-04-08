@@ -93,7 +93,11 @@ export default async function AdminQuoteViewPage({
   const entries = quotesData.subtaskEntries.filter((entry) => subtaskIds.has(entry.quoteSubtaskId));
   const comments = quotesData.comments.filter((comment) => comment.quoteId === quote.id);
   const latestPrepayment = quotesData.prepaymentSessions.find((session) => session.quoteId === quote.id) ?? null;
-  const activeAssignQuote = assignWorkersId === quote.id ? quote : null;
+  const canAssignWorkers = quote.status === "draft";
+  const canSign = quote.status === "draft";
+  const canManageSubtasks = quote.status === "draft";
+  const canManageEntries = quote.status === "draft";
+  const activeAssignQuote = canAssignWorkers && assignWorkersId === quote.id ? quote : null;
   const activeSignQuote = signQuoteId === quote.id ? quote : null;
   const activeAddSubtaskQuote = addSubtaskQuoteId === quote.id ? quote : null;
   const activeEditSubtask = subtasks.find((subtask) => subtask.id === editSubtaskId) ?? null;
@@ -103,10 +107,6 @@ export default async function AdminQuoteViewPage({
   const activeDeleteEntry = entries.find((entry) => entry.id === deleteEntryId) ?? null;
   const activeEditEntrySubtask = activeEditEntry ? subtaskById.get(activeEditEntry.quoteSubtaskId) ?? null : null;
   const activeDeleteEntrySubtask = activeDeleteEntry ? subtaskById.get(activeDeleteEntry.quoteSubtaskId) ?? null : null;
-  const canAssignWorkers = quote.status === "draft";
-  const canSign = quote.status === "draft";
-  const canManageSubtasks = quote.status === "draft";
-  const canManageEntries = quote.status === "draft";
 
   return (
     <main className="w-full">
@@ -142,7 +142,7 @@ export default async function AdminQuoteViewPage({
           description={quote.description || t(locale, "No summary provided yet.", "Nessuna sintesi fornita.")}
           action={(
             <div className="flex flex-wrap items-center gap-2">
-              {canAssignWorkers ? <Link href={`${detailHref}?assignWorkersId=${quote.id}#assign-workers`} className={quotesSecondaryButtonClass}>{t(locale, "Assign workers", "Assegna operatori")}</Link> : null}
+              {canAssignWorkers ? <Link href={`${detailHref}?assignWorkersId=${quote.id}`} className={quotesSecondaryButtonClass}>{t(locale, "Assign workers", "Assegna operatori")}</Link> : null}
               {canSign ? <Link href={`${detailHref}?signQuoteId=${quote.id}`} className={quotesPrimaryButtonClass}>{t(locale, "Sign", "Firma")}</Link> : null}
             </div>
           )}
@@ -260,29 +260,30 @@ export default async function AdminQuoteViewPage({
       </section>
 
       {activeAssignQuote ? (
-        <section id="assign-workers" className="mt-8 scroll-mt-24">
-          <QuotesSectionCard
-            title={t(locale, "Assign workers", "Assegna operatori")}
-            description={t(locale, "Only draft quotes can be staffed before the worker collaboration phase starts.", "Solo i preventivi in bozza possono essere assegnati prima che inizi la collaborazione degli operatori.")}
-            action={<Link href={detailHref} className={quotesSecondaryButtonClass}>{t(locale, "Close", "Chiudi")}</Link>}
-          >
-            <form action={assignQuoteWorkersAction} className="space-y-4">
-              <input type="hidden" name="quoteId" value={activeAssignQuote.id} />
-              <div className="space-y-1.5">
-                <label htmlFor="assign-worker-select" className="text-sm font-medium text-foreground">{t(locale, "Workers", "Operatori")}</label>
-                <select id="assign-worker-select" name="workerIds" multiple className={`${quotesInputClass} min-h-40`} defaultValue={assignedWorkers.map((assignment) => assignment.workerId)}>
-                  {workerOptions.map((worker) => (
-                    <option key={worker.id} value={worker.id}>{worker.name}</option>
-                  ))}
-                </select>
-                <p className="text-xs text-muted-foreground">{t(locale, "Hold Command/Ctrl to select multiple workers.", "Tieni premuto Command/Ctrl per selezionare più operatori.")}</p>
-              </div>
-              <div className="flex justify-end">
-                <button className={quotesPrimaryButtonClass}>{t(locale, "Save assignments", "Salva assegnazioni")}</button>
-              </div>
-            </form>
-          </QuotesSectionCard>
-        </section>
+        <QuoteActionModal
+          title={t(locale, "Assign workers", "Assegna operatori")}
+          closeHref={detailHref}
+          successRedirectHref={detailHref}
+          action={assignQuoteWorkersAction}
+          closeLabel={t(locale, "Close", "Chiudi")}
+          cancelLabel={t(locale, "Cancel", "Annulla")}
+          submitLabel={t(locale, "Save assignments", "Salva assegnazioni")}
+          submittingLabel={t(locale, "Saving…", "Salvataggio in corso…")}
+          successMessage={t(locale, "Assignments saved", "Assegnazioni salvate")}
+          genericErrorMessage={t(locale, "Unable to save assignments", "Impossibile salvare le assegnazioni")}
+        >
+          <input type="hidden" name="quoteId" value={activeAssignQuote.id} />
+          <div className="space-y-1.5">
+            <p className="text-sm text-muted-foreground">{t(locale, "Only draft quotes can be staffed before the worker collaboration phase starts.", "Solo i preventivi in bozza possono essere assegnati prima che inizi la collaborazione degli operatori.")}</p>
+            <label htmlFor="assign-worker-select" className="text-sm font-medium text-foreground">{t(locale, "Workers", "Operatori")}</label>
+            <select id="assign-worker-select" name="workerIds" multiple className={`${quotesInputClass} min-h-40`} defaultValue={assignedWorkers.map((assignment) => assignment.workerId)}>
+              {workerOptions.map((worker) => (
+                <option key={worker.id} value={worker.id}>{worker.name}</option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">{t(locale, "Hold Command/Ctrl to select multiple workers.", "Tieni premuto Command/Ctrl per selezionare più operatori.")}</p>
+          </div>
+        </QuoteActionModal>
       ) : null}
 
       {activeEntryQuote ? (
