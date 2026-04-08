@@ -77,6 +77,8 @@ export function CustomerQuoteDetail({
         <QuotesSignatureSummary
           title={t(locale, "Sign-off", "Firma")}
           description={t(locale, "Admin sign-off unlocks the single conversion + prepayment step.", "La firma dell'amministratore sblocca l'unico passaggio di conversione + prepagamento.")}
+          signerLabel={t(locale, "Signer", "Firmatario")}
+          signedAtTitle={t(locale, "Signed at", "Firmato il")}
           signerName={quote.signedByName}
           signedAtLabel={formatDateTime(tag, quote.signedAt)}
           emptyMessage={t(locale, "Waiting for admin signature.", "In attesa della firma dell'amministratore.")}

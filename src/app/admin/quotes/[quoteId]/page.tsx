@@ -161,6 +161,8 @@ export default async function AdminQuoteViewPage({
 
           <QuotesSignatureSummary
             title={t(locale, "Signature", "Firma")}
+            signerLabel={t(locale, "Signer", "Firmatario")}
+            signedAtTitle={t(locale, "Signed at", "Firmato il")}
             signerName={quote.signedByName}
             signedAtLabel={formatDateTime(tag, quote.signedAt)}
             emptyMessage={t(locale, "Not signed yet.", "Non ancora firmato.")}

@@ -3,6 +3,8 @@ import { QuotesSectionCard, quotesInsetClass } from "@/components/quotes/quotes-
 interface QuotesSignatureSummaryProps {
   title: string;
   description?: string;
+  signerLabel: string;
+  signedAtTitle: string;
   signerName?: string | null;
   signerEmail?: string | null;
   signedAtLabel?: string | null;
@@ -13,6 +15,8 @@ interface QuotesSignatureSummaryProps {
 export function QuotesSignatureSummary({
   title,
   description,
+  signerLabel,
+  signedAtTitle,
   signerName,
   signerEmail,
   signedAtLabel,
@@ -26,12 +30,12 @@ export function QuotesSignatureSummary({
       {hasSignature ? (
         <div className="grid gap-3 sm:grid-cols-2">
           <div className={quotesInsetClass + " px-3 py-3"}>
-            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Signer</p>
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{signerLabel}</p>
             <p className="mt-1 text-sm font-medium text-foreground">{signerName || "—"}</p>
             {signerEmail ? <p className="mt-1 text-sm text-muted-foreground">{signerEmail}</p> : null}
           </div>
           <div className={quotesInsetClass + " px-3 py-3"}>
-            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Signed at</p>
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{signedAtTitle}</p>
             <p className="mt-1 text-sm font-medium text-foreground">{signedAtLabel || "—"}</p>
             {ipAddressLabel ? <p className="mt-1 text-sm text-muted-foreground">IP {ipAddressLabel}</p> : null}
           </div>
