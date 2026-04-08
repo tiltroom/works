@@ -7,6 +7,7 @@ import {
   deleteQuoteSubtaskAction,
   deleteQuoteSubtaskEntryAction,
   loadQuotesPageData,
+  revertQuoteToDraftAction,
   signQuoteAction,
   updateQuoteSubtaskAction,
   updateQuoteSubtaskEntryAction,
@@ -51,7 +52,7 @@ export default async function AdminQuoteViewPage({
   searchParams,
 }: {
   params: Promise<{ quoteId: string }> | { quoteId: string };
-  searchParams?: Promise<{ assignWorkersId?: string; signQuoteId?: string; addSubtaskQuoteId?: string; editSubtaskId?: string; deleteSubtaskId?: string; entryQuoteId?: string; editEntryId?: string; deleteEntryId?: string; toast?: string; toastMessage?: string }> | { assignWorkersId?: string; signQuoteId?: string; addSubtaskQuoteId?: string; editSubtaskId?: string; deleteSubtaskId?: string; entryQuoteId?: string; editEntryId?: string; deleteEntryId?: string; toast?: string; toastMessage?: string };
+  searchParams?: Promise<{ assignWorkersId?: string; signQuoteId?: string; revertQuoteId?: string; addSubtaskQuoteId?: string; editSubtaskId?: string; deleteSubtaskId?: string; entryQuoteId?: string; editEntryId?: string; deleteEntryId?: string; toast?: string; toastMessage?: string }> | { assignWorkersId?: string; signQuoteId?: string; revertQuoteId?: string; addSubtaskQuoteId?: string; editSubtaskId?: string; deleteSubtaskId?: string; entryQuoteId?: string; editEntryId?: string; deleteEntryId?: string; toast?: string; toastMessage?: string };
 }) {
   const locale = await getLocale();
   const tag = localeTag(locale);
@@ -63,6 +64,7 @@ export default async function AdminQuoteViewPage({
   const paramsValue = await Promise.resolve(searchParams ?? {});
   const assignWorkersId = paramsValue.assignWorkersId?.trim();
   const signQuoteId = paramsValue.signQuoteId?.trim();
+  const revertQuoteId = paramsValue.revertQuoteId?.trim();
   const addSubtaskQuoteId = paramsValue.addSubtaskQuoteId?.trim();
   const editSubtaskId = paramsValue.editSubtaskId?.trim();
   const deleteSubtaskId = paramsValue.deleteSubtaskId?.trim();
@@ -95,10 +97,12 @@ export default async function AdminQuoteViewPage({
   const latestPrepayment = quotesData.prepaymentSessions.find((session) => session.quoteId === quote.id) ?? null;
   const canAssignWorkers = quote.status === "draft";
   const canSign = quote.status === "draft";
+  const canRevertToDraft = quote.status === "signed";
   const canManageSubtasks = quote.status === "draft";
   const canManageEntries = quote.status === "draft";
   const activeAssignQuote = canAssignWorkers && assignWorkersId === quote.id ? quote : null;
   const activeSignQuote = signQuoteId === quote.id ? quote : null;
+  const activeRevertQuote = canRevertToDraft && revertQuoteId === quote.id ? quote : null;
   const activeAddSubtaskQuote = addSubtaskQuoteId === quote.id ? quote : null;
   const activeEditSubtask = subtasks.find((subtask) => subtask.id === editSubtaskId) ?? null;
   const activeDeleteSubtask = subtasks.find((subtask) => subtask.id === deleteSubtaskId) ?? null;
@@ -144,6 +148,7 @@ export default async function AdminQuoteViewPage({
             <div className="flex flex-wrap items-center gap-2">
               {canAssignWorkers ? <Link href={`${detailHref}?assignWorkersId=${quote.id}`} className={quotesSecondaryButtonClass}>{t(locale, "Assign workers", "Assegna operatori")}</Link> : null}
               {canSign ? <Link href={`${detailHref}?signQuoteId=${quote.id}`} className={quotesPrimaryButtonClass}>{t(locale, "Sign", "Firma")}</Link> : null}
+              {canRevertToDraft ? <Link href={`${detailHref}?revertQuoteId=${quote.id}`} className={quotesSecondaryButtonClass}>{t(locale, "Back to draft", "Torna in bozza")}</Link> : null}
             </div>
           )}
           meta={[
@@ -489,9 +494,34 @@ export default async function AdminQuoteViewPage({
           <p className="text-sm text-muted-foreground">
             {t(locale, "Signing ends the editable draft phase and unlocks the customer’s single convert + prepay step.", "La firma chiude la fase di bozza modificabile e sblocca l'unico passaggio cliente di conversione + prepagamento.")}
           </p>
-          <div className="space-y-1.5">
-            <label htmlFor="admin-signature-name" className="text-sm font-medium text-foreground">{t(locale, "Signer name", "Nome del firmatario")}</label>
-            <input id="admin-signature-name" name="signatureName" required defaultValue={activeSignQuote.signedByName ?? ""} className={quotesInputClass} placeholder={t(locale, "Maria Rossi", "Maria Rossi")} />
+          <div className="rounded-xl border border-border/70 bg-background/60 px-4 py-3 text-sm text-muted-foreground">
+            {t(locale, "The quote will be signed using your current admin profile name.", "Il preventivo verrà firmato usando il nome attuale del tuo profilo admin.")}
+          </div>
+        </QuoteActionModal>
+      ) : null}
+
+      {activeRevertQuote ? (
+        <QuoteActionModal
+          title={t(locale, "Return quote to draft", "Riporta il preventivo in bozza")}
+          closeHref={detailHref}
+          successRedirectHref={detailHref}
+          action={revertQuoteToDraftAction}
+          closeLabel={t(locale, "Close", "Chiudi")}
+          cancelLabel={t(locale, "Cancel", "Annulla")}
+          submitLabel={t(locale, "Return to draft", "Riporta in bozza")}
+          submittingLabel={t(locale, "Returning…", "Ripristino in corso…")}
+          successMessage={t(locale, "Quote returned to draft", "Preventivo riportato in bozza")}
+          genericErrorMessage={t(locale, "Unable to return quote to draft", "Impossibile riportare il preventivo in bozza")}
+        >
+          <input type="hidden" name="quoteId" value={activeRevertQuote.id} />
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {t(locale, "This clears the existing signature and reopens the quote for worker assignments, subtasks, entries, and discussion updates.", "Questa azione rimuove la firma esistente e riapre il preventivo per assegnazioni operatori, sottoattività, voci registrate e aggiornamenti della discussione.")}
+            </p>
+            <div className="rounded-xl border border-border/70 bg-background/60 px-4 py-3 text-sm text-muted-foreground">
+              <p className="font-medium text-foreground">{activeRevertQuote.title}</p>
+              <p className="mt-1">{t(locale, "Use this only when no conversion checkout has started for the quote.", "Usa questa azione solo quando non è ancora iniziato alcun checkout di conversione per il preventivo.")}</p>
+            </div>
           </div>
         </QuoteActionModal>
       ) : null}

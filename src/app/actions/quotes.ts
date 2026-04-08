@@ -867,10 +867,10 @@ export async function signQuoteAction(formData: FormData) {
   const locale = await getLocale();
   const admin = await requireRole(["admin"]);
   const quoteId = trimString(formData, "quoteId");
-  const signatureName = trimString(formData, "signatureName");
+  const signatureName = admin.full_name?.trim() || "";
 
   if (!quoteId || !signatureName) {
-    throw new Error(t(locale, "Signer name is required", "Il nome del firmatario è obbligatorio"));
+    throw new Error(t(locale, "Admin profile name is required to sign quotes", "Il nome del profilo admin è obbligatorio per firmare i preventivi"));
   }
 
   const existing = await getQuoteForAdmin(quoteId);
@@ -890,6 +890,52 @@ export async function signQuoteAction(formData: FormData) {
   }
 
   revalidateQuotesModule();
+}
+
+export async function revertQuoteToDraftAction(formData: FormData) {
+  const locale = await getLocale();
+  await requireRole(["admin"]);
+  const quoteId = trimString(formData, "quoteId");
+
+  if (!quoteId) {
+    throw new Error(t(locale, "Quote id is required", "L'ID del preventivo è obbligatorio"));
+  }
+
+  const existing = await getQuoteForAdmin(quoteId);
+  if (existing.status !== "signed") {
+    throw new Error(t(locale, "Only signed quotes can be returned to draft", "Solo i preventivi firmati possono tornare in bozza"));
+  }
+
+  if (existing.linkedProjectId) {
+    throw new Error(t(locale, "Converted quotes cannot be returned to draft", "I preventivi convertiti non possono tornare in bozza"));
+  }
+
+  const supabase = await assertQuotesBackend();
+  const { data: prepaymentSessions, error: prepaymentError } = await supabase
+    .from("quote_prepayment_sessions")
+    .select("id")
+    .eq("quote_id", quoteId)
+    .in("status", ["pending", "paid"]);
+
+  if (prepaymentError) {
+    throw new Error(prepaymentError.message);
+  }
+
+  if ((prepaymentSessions ?? []).length > 0) {
+    throw new Error(t(locale, "Quotes with prepayment activity cannot be returned to draft", "I preventivi con attività di prepagamento non possono tornare in bozza"));
+  }
+
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("quotes")
+    .update({ status: "draft", signed_by_name: null, signed_by_user_id: null, signed_at: null, updated_at: now })
+    .eq("id", quoteId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  revalidateQuotesModule(quoteId);
 }
 
 export async function createCheckoutForQuotePrepaymentAction(formData: FormData) {
