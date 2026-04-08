@@ -377,6 +377,7 @@ export async function loadQuotesPageData(role: AppRole, profileId: string): Prom
   const normalizedQuotes = quotes.map((quote) => ({
     ...quote,
     customerName: quote.customerName ?? profileNameById.get(quote.customerId) ?? null,
+    signedByName: quote.signedByUserId ? profileNameById.get(quote.signedByUserId) ?? quote.signedByName : quote.signedByName,
     linkedProjectName: quote.linkedProjectId ? projectNameById.get(quote.linkedProjectId) ?? null : null,
     projectName: quote.linkedProjectId ? projectNameById.get(quote.linkedProjectId) ?? null : null,
   }));
