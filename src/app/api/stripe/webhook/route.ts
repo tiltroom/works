@@ -27,7 +27,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 
-  if (event.type === "checkout.session.completed") {
+  if (
+    event.type === "checkout.session.completed"
+    || event.type === "checkout.session.async_payment_succeeded"
+  ) {
     const session = event.data.object;
     const metadata = session.metadata ?? {};
     const checkoutKind = metadata.checkoutKind;
@@ -73,6 +76,10 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
 
+      return NextResponse.json({ received: true });
+    }
+
+    if (event.type !== "checkout.session.completed") {
       return NextResponse.json({ received: true });
     }
 
