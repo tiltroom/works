@@ -7,6 +7,7 @@ import {
   deleteQuoteSubtaskAction,
   deleteQuoteSubtaskEntryAction,
   loadQuotesPageData,
+  markQuoteAsPaidAction,
   revertQuoteToDraftAction,
   signQuoteAction,
   updateQuoteSubtaskAction,
@@ -52,7 +53,7 @@ export default async function AdminQuoteViewPage({
   searchParams,
 }: {
   params: Promise<{ quoteId: string }> | { quoteId: string };
-  searchParams?: Promise<{ assignWorkersId?: string; signQuoteId?: string; revertQuoteId?: string; addSubtaskQuoteId?: string; editSubtaskId?: string; deleteSubtaskId?: string; entryQuoteId?: string; editEntryId?: string; deleteEntryId?: string; toast?: string; toastMessage?: string }> | { assignWorkersId?: string; signQuoteId?: string; revertQuoteId?: string; addSubtaskQuoteId?: string; editSubtaskId?: string; deleteSubtaskId?: string; entryQuoteId?: string; editEntryId?: string; deleteEntryId?: string; toast?: string; toastMessage?: string };
+  searchParams?: Promise<{ assignWorkersId?: string; signQuoteId?: string; revertQuoteId?: string; markPaidQuoteId?: string; addSubtaskQuoteId?: string; editSubtaskId?: string; deleteSubtaskId?: string; entryQuoteId?: string; editEntryId?: string; deleteEntryId?: string; toast?: string; toastMessage?: string }> | { assignWorkersId?: string; signQuoteId?: string; revertQuoteId?: string; markPaidQuoteId?: string; addSubtaskQuoteId?: string; editSubtaskId?: string; deleteSubtaskId?: string; entryQuoteId?: string; editEntryId?: string; deleteEntryId?: string; toast?: string; toastMessage?: string };
 }) {
   const locale = await getLocale();
   const tag = localeTag(locale);
@@ -65,6 +66,7 @@ export default async function AdminQuoteViewPage({
   const assignWorkersId = paramsValue.assignWorkersId?.trim();
   const signQuoteId = paramsValue.signQuoteId?.trim();
   const revertQuoteId = paramsValue.revertQuoteId?.trim();
+  const markPaidQuoteId = paramsValue.markPaidQuoteId?.trim();
   const addSubtaskQuoteId = paramsValue.addSubtaskQuoteId?.trim();
   const editSubtaskId = paramsValue.editSubtaskId?.trim();
   const deleteSubtaskId = paramsValue.deleteSubtaskId?.trim();
@@ -94,15 +96,19 @@ export default async function AdminQuoteViewPage({
   const subtaskIds = new Set(subtasks.map((subtask) => subtask.id));
   const entries = quotesData.subtaskEntries.filter((entry) => subtaskIds.has(entry.quoteSubtaskId));
   const comments = quotesData.comments.filter((comment) => comment.quoteId === quote.id);
+  const quotePrepaymentSessions = quotesData.prepaymentSessions.filter((session) => session.quoteId === quote.id);
   const latestPrepayment = quotesData.prepaymentSessions.find((session) => session.quoteId === quote.id) ?? null;
+  const hasPrepaymentActivity = quotePrepaymentSessions.some((session) => session.status === "pending" || session.status === "paid");
   const canAssignWorkers = quote.status === "draft";
   const canSign = quote.status === "draft";
   const canRevertToDraft = quote.status === "signed";
+  const canMarkAsPaid = quote.status === "signed" && !quote.linkedProjectName && !hasPrepaymentActivity;
   const canManageSubtasks = quote.status === "draft";
   const canManageEntries = quote.status === "draft";
   const activeAssignQuote = canAssignWorkers && assignWorkersId === quote.id ? quote : null;
   const activeSignQuote = signQuoteId === quote.id ? quote : null;
   const activeRevertQuote = canRevertToDraft && revertQuoteId === quote.id ? quote : null;
+  const activeMarkPaidQuote = canMarkAsPaid && markPaidQuoteId === quote.id ? quote : null;
   const activeAddSubtaskQuote = addSubtaskQuoteId === quote.id ? quote : null;
   const activeEditSubtask = subtasks.find((subtask) => subtask.id === editSubtaskId) ?? null;
   const activeDeleteSubtask = subtasks.find((subtask) => subtask.id === deleteSubtaskId) ?? null;
@@ -149,6 +155,7 @@ export default async function AdminQuoteViewPage({
               {canAssignWorkers ? <Link href={`${detailHref}?assignWorkersId=${quote.id}`} className={quotesSecondaryButtonClass}>{t(locale, "Assign workers", "Assegna operatori")}</Link> : null}
               {canSign ? <Link href={`${detailHref}?signQuoteId=${quote.id}`} className={quotesPrimaryButtonClass}>{t(locale, "Sign", "Firma")}</Link> : null}
               {canRevertToDraft ? <Link href={`${detailHref}?revertQuoteId=${quote.id}`} className={quotesSecondaryButtonClass}>{t(locale, "Back to draft", "Torna in bozza")}</Link> : null}
+              {canMarkAsPaid ? <Link href={`${detailHref}?markPaidQuoteId=${quote.id}`} className={quotesPrimaryButtonClass}>{t(locale, "Mark as paid", "Segna come pagato")}</Link> : null}
             </div>
           )}
           meta={[
@@ -521,6 +528,42 @@ export default async function AdminQuoteViewPage({
             <div className="rounded-xl border border-border/70 bg-background/60 px-4 py-3 text-sm text-muted-foreground">
               <p className="font-medium text-foreground">{activeRevertQuote.title}</p>
               <p className="mt-1">{t(locale, "Use this only when no conversion checkout has started for the quote.", "Usa questa azione solo quando non è ancora iniziato alcun checkout di conversione per il preventivo.")}</p>
+            </div>
+          </div>
+        </QuoteActionModal>
+      ) : null}
+
+      {activeMarkPaidQuote ? (
+        <QuoteActionModal
+          title={t(locale, "Mark quote as paid", "Segna il preventivo come pagato")}
+          closeHref={detailHref}
+          successRedirectHref={detailHref}
+          action={markQuoteAsPaidAction}
+          closeLabel={t(locale, "Close", "Chiudi")}
+          cancelLabel={t(locale, "Cancel", "Annulla")}
+          submitLabel={t(locale, "Mark as paid", "Segna come pagato")}
+          submittingLabel={t(locale, "Processing…", "Elaborazione in corso…")}
+          successMessage={t(locale, "Quote marked as paid", "Preventivo segnato come pagato")}
+          genericErrorMessage={t(locale, "Unable to mark quote as paid", "Impossibile segnare il preventivo come pagato")}
+        >
+          <input type="hidden" name="quoteId" value={activeMarkPaidQuote.id} />
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {t(locale, "This skips Stripe checkout and immediately converts the signed quote into a live project with the estimated hours credited as a manual payment entry.", "Questa azione salta il checkout Stripe e converte subito il preventivo firmato in un progetto attivo, accreditando le ore stimate come voce di pagamento manuale.")}
+            </p>
+            <div className="rounded-xl border border-border/70 bg-background/60 px-4 py-3 text-sm text-muted-foreground">
+              <p className="font-medium text-foreground">{activeMarkPaidQuote.title}</p>
+              <p className="mt-1">{t(locale, "Use this only when the customer has already settled the quote outside the platform and no Stripe prepayment has started.", "Usa questa azione solo quando il cliente ha già saldato il preventivo fuori piattaforma e non è stato avviato alcun prepagamento Stripe.")}</p>
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="admin-mark-paid-comment" className="text-sm font-medium text-foreground">{t(locale, "Internal note (optional)", "Nota interna (facoltativa)")}</label>
+              <textarea
+                id="admin-mark-paid-comment"
+                name="adminComment"
+                rows={3}
+                className={`${quotesInputClass} min-h-24`}
+                placeholder={t(locale, "Example: settled by bank transfer on site", "Esempio: saldato tramite bonifico fuori piattaforma")}
+              />
             </div>
           </div>
         </QuoteActionModal>

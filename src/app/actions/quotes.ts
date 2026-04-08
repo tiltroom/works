@@ -24,6 +24,7 @@ import {
   type QuoteWorkerRecord,
 } from "@/lib/quotes";
 import { getStripeClient } from "@/lib/stripe";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { AppRole } from "@/lib/types";
 
@@ -932,6 +933,73 @@ export async function revertQuoteToDraftAction(formData: FormData) {
     .eq("id", quoteId);
 
   if (error) {
+    throw new Error(error.message);
+  }
+
+  revalidateQuotesModule(quoteId);
+}
+
+export async function markQuoteAsPaidAction(formData: FormData) {
+  const locale = await getLocale();
+  await requireRole(["admin"]);
+  const quoteId = trimString(formData, "quoteId");
+  const adminComment = trimString(formData, "adminComment");
+
+  if (!quoteId) {
+    throw new Error(t(locale, "Quote id is required", "L'ID del preventivo è obbligatorio"));
+  }
+
+  const existing = await getQuoteForAdmin(quoteId);
+  if (existing.status !== "signed") {
+    throw new Error(t(locale, "Only signed quotes can be marked as paid", "Solo i preventivi firmati possono essere segnati come pagati"));
+  }
+
+  if (existing.linkedProjectId) {
+    throw new Error(t(locale, "Quote already converted", "Preventivo già convertito"));
+  }
+
+  if ((existing.totalEstimatedHours ?? 0) <= 0) {
+    throw new Error(t(locale, "Estimated hours must be greater than zero", "Le ore stimate devono essere maggiori di zero"));
+  }
+
+  const supabase = await assertQuotesBackend();
+  const { data: prepaymentSessions, error: prepaymentError } = await supabase
+    .from("quote_prepayment_sessions")
+    .select("id")
+    .eq("quote_id", quoteId)
+    .in("status", ["pending", "paid"]);
+
+  if (prepaymentError) {
+    throw new Error(prepaymentError.message);
+  }
+
+  if ((prepaymentSessions ?? []).length > 0) {
+    throw new Error(t(locale, "Quotes with prepayment activity cannot be manually marked as paid", "I preventivi con attività di prepagamento non possono essere segnati manualmente come pagati"));
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin.rpc("apply_manual_quote_conversion", {
+    p_quote_id: quoteId,
+    p_admin_comment: adminComment || null,
+  });
+
+  if (error) {
+    if (error.message.includes("quote_not_found")) {
+      throw new Error(t(locale, "Quote not found", "Preventivo non trovato"));
+    }
+
+    if (error.message.includes("quote_not_signed")) {
+      throw new Error(t(locale, "Only signed quotes can be marked as paid", "Solo i preventivi firmati possono essere segnati come pagati"));
+    }
+
+    if (error.message.includes("quote_invalid_hours")) {
+      throw new Error(t(locale, "Estimated hours must be greater than zero", "Le ore stimate devono essere maggiori di zero"));
+    }
+
+    if (error.message.includes("quote_has_prepayment_activity")) {
+      throw new Error(t(locale, "Quotes with prepayment activity cannot be manually marked as paid", "I preventivi con attività di prepagamento non possono essere segnati manualmente come pagati"));
+    }
+
     throw new Error(error.message);
   }
 

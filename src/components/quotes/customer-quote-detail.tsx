@@ -85,37 +85,39 @@ export function CustomerQuoteDetail({
         />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <QuotesSubtaskCard
-          title={t(locale, "Subtask estimates", "Stime sottoattività")}
-          description={t(locale, "Worker-generated effort breakdown used to determine conversion hours.", "Suddivisione dello sforzo generata dagli operatori, usata per determinare le ore di conversione.")}
-          items={subtasks.map((subtask) => {
-            const relatedEntries = entries.filter((entry) => entry.quoteSubtaskId === subtask.id);
-            return {
-              id: subtask.id,
-              title: subtask.title,
-              description: subtask.description,
-              estimateLabel: formatQuoteHours(subtask.estimatedHours),
-              loggedLabel: formatQuoteHours(relatedEntries.reduce((total, entry) => total + entry.loggedHours, 0)),
-            };
-          })}
-          emptyMessage={t(locale, "No subtasks estimated yet.", "Nessuna sottoattività stimata.")}
-        />
+      {quote.status !== "draft" ? (
+        <div className="grid gap-4 xl:grid-cols-2">
+          <QuotesSubtaskCard
+            title={t(locale, "Subtask estimates", "Stime sottoattività")}
+            description={t(locale, "Worker-generated effort breakdown used to determine conversion hours.", "Suddivisione dello sforzo generata dagli operatori, usata per determinare le ore di conversione.")}
+            items={subtasks.map((subtask) => {
+              const relatedEntries = entries.filter((entry) => entry.quoteSubtaskId === subtask.id);
+              return {
+                id: subtask.id,
+                title: subtask.title,
+                description: subtask.description,
+                estimateLabel: formatQuoteHours(subtask.estimatedHours),
+                loggedLabel: formatQuoteHours(relatedEntries.reduce((total, entry) => total + entry.loggedHours, 0)),
+              };
+            })}
+            emptyMessage={t(locale, "No subtasks estimated yet.", "Nessuna sottoattività stimata.")}
+          />
 
-        <QuotesWorkerEntriesCard
-          title={t(locale, "Logged subtask work", "Lavoro registrato sulle sottoattività")}
-          description={t(locale, "Progress entries added by assigned workers while the quote remains draft.", "Voci di avanzamento aggiunte dagli operatori assegnati mentre il preventivo resta in bozza.")}
-          items={entries.map((entry) => ({
-            id: entry.id,
-            workerName: entry.workerName || t(locale, "Worker", "Operatore"),
-            subtaskTitle: subtasks.find((subtask) => subtask.id === entry.quoteSubtaskId)?.title ?? t(locale, "Unknown subtask", "Sottoattività sconosciuta"),
-            loggedLabel: formatQuoteHours(entry.loggedHours),
-            note: entry.note,
-            metaLabel: formatDateTime(tag, entry.createdAt),
-          }))}
-          emptyMessage={t(locale, "No logged work yet.", "Nessun lavoro registrato.")}
-        />
-      </div>
+          <QuotesWorkerEntriesCard
+            title={t(locale, "Logged subtask work", "Lavoro registrato sulle sottoattività")}
+            description={t(locale, "Progress entries added by assigned workers while the quote remains draft.", "Voci di avanzamento aggiunte dagli operatori assegnati mentre il preventivo resta in bozza.")}
+            items={entries.map((entry) => ({
+              id: entry.id,
+              workerName: entry.workerName || t(locale, "Worker", "Operatore"),
+              subtaskTitle: subtasks.find((subtask) => subtask.id === entry.quoteSubtaskId)?.title ?? t(locale, "Unknown subtask", "Sottoattività sconosciuta"),
+              loggedLabel: formatQuoteHours(entry.loggedHours),
+              note: entry.note,
+              metaLabel: formatDateTime(tag, entry.createdAt),
+            }))}
+            emptyMessage={t(locale, "No logged work yet.", "Nessun lavoro registrato.")}
+          />
+        </div>
+      ) : null}
 
       <div className="grid gap-4 xl:grid-cols-2">
         <QuotesCommentsList
