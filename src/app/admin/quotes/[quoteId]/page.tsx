@@ -471,24 +471,27 @@ export default async function AdminQuoteViewPage({
       ) : null}
 
       {activeSignQuote ? (
-        <section className="mt-8">
-          <QuotesSectionCard
-            title={t(locale, "Sign quote", "Firma preventivo")}
-            description={t(locale, "Signing ends the editable draft phase and unlocks the customer’s single convert + prepay step.", "La firma chiude la fase di bozza modificabile e sblocca l'unico passaggio cliente di conversione + prepagamento.")}
-            action={<Link href={detailHref} className={quotesSecondaryButtonClass}>{t(locale, "Close", "Chiudi")}</Link>}
-          >
-            <form action={signQuoteAction} className="space-y-4">
-              <input type="hidden" name="quoteId" value={activeSignQuote.id} />
-              <div className="space-y-1.5">
-                <label htmlFor="admin-signature-name" className="text-sm font-medium text-foreground">{t(locale, "Signer name", "Nome del firmatario")}</label>
-                <input id="admin-signature-name" name="signatureName" required defaultValue={activeSignQuote.signedByName ?? ""} className={quotesInputClass} placeholder={t(locale, "Maria Rossi", "Maria Rossi")} />
-              </div>
-              <div className="flex justify-end">
-                <button className={quotesPrimaryButtonClass}>{t(locale, "Apply signature", "Applica firma")}</button>
-              </div>
-            </form>
-          </QuotesSectionCard>
-        </section>
+        <QuoteActionModal
+          title={t(locale, "Sign quote", "Firma preventivo")}
+          closeHref={detailHref}
+          successRedirectHref={detailHref}
+          action={signQuoteAction}
+          closeLabel={t(locale, "Close", "Chiudi")}
+          cancelLabel={t(locale, "Cancel", "Annulla")}
+          submitLabel={t(locale, "Apply signature", "Applica firma")}
+          submittingLabel={t(locale, "Applying…", "Applicazione in corso…")}
+          successMessage={t(locale, "Quote signed", "Preventivo firmato")}
+          genericErrorMessage={t(locale, "Unable to sign quote", "Impossibile firmare il preventivo")}
+        >
+          <input type="hidden" name="quoteId" value={activeSignQuote.id} />
+          <p className="text-sm text-muted-foreground">
+            {t(locale, "Signing ends the editable draft phase and unlocks the customer’s single convert + prepay step.", "La firma chiude la fase di bozza modificabile e sblocca l'unico passaggio cliente di conversione + prepagamento.")}
+          </p>
+          <div className="space-y-1.5">
+            <label htmlFor="admin-signature-name" className="text-sm font-medium text-foreground">{t(locale, "Signer name", "Nome del firmatario")}</label>
+            <input id="admin-signature-name" name="signatureName" required defaultValue={activeSignQuote.signedByName ?? ""} className={quotesInputClass} placeholder={t(locale, "Maria Rossi", "Maria Rossi")} />
+          </div>
+        </QuoteActionModal>
       ) : null}
     </main>
   );
