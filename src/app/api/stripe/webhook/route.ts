@@ -108,7 +108,7 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient();
-    const { error } = await admin.rpc("apply_hour_purchase", {
+    const { error } = await admin.rpc("apply_debt_first_hour_purchase", {
       p_event_id: event.id,
       p_project_id: projectId,
       p_customer_id: customerId,

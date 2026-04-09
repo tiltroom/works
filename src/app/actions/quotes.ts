@@ -436,6 +436,7 @@ export async function createQuoteDraftAction(formData: FormData) {
     content_html: contentHtml || null,
     content_json: contentJson,
     status: "draft",
+    billing_mode: "prepaid",
     created_by: profile.id,
   });
 
@@ -958,7 +959,9 @@ export async function markQuoteAsPaidAction(formData: FormData) {
     throw new Error(t(locale, "Quote already converted", "Preventivo già convertito"));
   }
 
-  if ((existing.totalEstimatedHours ?? 0) <= 0) {
+  const isPostPaid = existing.billingMode === "postpaid";
+
+  if (!isPostPaid && (existing.totalEstimatedHours ?? 0) <= 0) {
     throw new Error(t(locale, "Estimated hours must be greater than zero", "Le ore stimate devono essere maggiori di zero"));
   }
 
@@ -978,7 +981,8 @@ export async function markQuoteAsPaidAction(formData: FormData) {
   }
 
   const admin = createAdminClient();
-  const { error } = await admin.rpc("apply_manual_quote_conversion", {
+  const rpcName = isPostPaid ? "apply_postpaid_quote_conversion" : "apply_manual_quote_conversion";
+  const { error } = await admin.rpc(rpcName, {
     p_quote_id: quoteId,
     p_admin_comment: adminComment || null,
   });
@@ -1023,6 +1027,10 @@ export async function createCheckoutForQuotePrepaymentAction(formData: FormData)
 
   if (existing.linkedProjectId) {
     throw new Error(t(locale, "Quote already converted", "Preventivo già convertito"));
+  }
+
+  if (existing.billingMode === "postpaid") {
+    throw new Error(t(locale, "Post-paid quotes are converted by the administrator", "I preventivi post-pagati vengono convertiti dall'amministratore"));
   }
 
   const estimatedHours = existing.totalEstimatedHours ?? 0;
