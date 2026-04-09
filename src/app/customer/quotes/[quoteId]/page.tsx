@@ -2,22 +2,32 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { loadQuotesPageData, startQuoteConversionCheckoutAction } from "@/app/actions/quotes";
 import { CustomerQuoteDetail, quotesPrimaryButtonClass, quotesSecondaryButtonClass } from "@/components/quotes";
+import { QueryToast } from "@/components/ui/query-toast";
 import { requireRole } from "@/lib/auth";
 import { localeTag, t } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n-server";
+import type { QueryToastVariant } from "@/lib/query-toast";
 
 export const dynamic = "force-dynamic";
 
 export default async function CustomerQuoteViewPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ quoteId: string }> | { quoteId: string };
+  searchParams?: Promise<{ toast?: string; toastMessage?: string }> | { toast?: string; toastMessage?: string };
 }) {
   const locale = await getLocale();
   const tag = localeTag(locale);
   const profile = await requireRole(["customer"]);
   const routeParams = await Promise.resolve(params);
+  const paramsValue = await Promise.resolve(searchParams ?? {});
   const quoteId = routeParams.quoteId?.trim();
+  const toastTypeParam = paramsValue.toast?.trim();
+  const toastMessageParam = paramsValue.toastMessage?.trim();
+  const activeToast = (toastTypeParam === "success" || toastTypeParam === "error") && toastMessageParam
+    ? { variant: toastTypeParam as QueryToastVariant, message: toastMessageParam }
+    : null;
   const quotesData = await loadQuotesPageData("customer", profile.id);
   const quote = quotesData.quotes.find((entry) => entry.id === quoteId) ?? null;
 
@@ -36,6 +46,8 @@ export default async function CustomerQuoteViewPage({
 
   return (
     <main className="w-full space-y-8">
+      {activeToast ? <QueryToast variant={activeToast.variant} message={activeToast.message} closeLabel={t(locale, "Close", "Chiudi")} /> : null}
+
       <header className="border-b border-border/70 pb-6">
         <div className="mb-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <Link href="/customer/quotes" className="rounded-full border border-border/70 bg-background/60 px-3 py-1 transition-colors hover:bg-accent hover:text-accent-foreground">

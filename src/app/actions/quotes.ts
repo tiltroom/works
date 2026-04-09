@@ -6,6 +6,7 @@ import { getCurrentUser, requireRole } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { t } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n-server";
+import { withQueryToast } from "@/lib/query-toast";
 import {
   isQuotesBackendMissingError,
   parseQuoteCommentRecord,
@@ -429,22 +430,40 @@ export async function createQuoteDraftAction(formData: FormData) {
   }
 
   const supabase = await assertQuotesBackend();
-  const { error } = await supabase.from("quotes").insert({
-    customer_id: profile.id,
-    title,
-    description: description || null,
-    content_html: contentHtml || null,
-    content_json: contentJson,
-    status: "draft",
-    billing_mode: "prepaid",
-    created_by: profile.id,
-  });
+  const { data, error } = await supabase
+    .from("quotes")
+    .insert({
+      customer_id: profile.id,
+      title,
+      description: description || null,
+      content_html: contentHtml || null,
+      content_json: contentJson,
+      status: "draft",
+      billing_mode: "prepaid",
+      created_by: profile.id,
+    })
+    .select("id")
+    .single<{ id: string }>();
 
   if (error) {
     throw new Error(error.message);
   }
 
-  revalidateQuotesModule();
+  const quoteId = data?.id?.trim();
+
+  if (!quoteId) {
+    throw new Error(t(locale, "Quote created but missing identifier", "Preventivo creato ma identificatore mancante"));
+  }
+
+  revalidateQuotesModule(quoteId);
+
+  redirect(
+    withQueryToast(
+      `/customer/quotes/${quoteId}`,
+      "success",
+      t(locale, "Draft created successfully", "Bozza creata con successo"),
+    ),
+  );
 }
 
 export async function updateQuoteDraftAction(formData: FormData) {
