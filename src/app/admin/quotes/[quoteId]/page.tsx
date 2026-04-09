@@ -155,11 +155,12 @@ export default async function AdminQuoteViewPage({
               {canAssignWorkers ? <Link href={`${detailHref}?assignWorkersId=${quote.id}`} className={quotesSecondaryButtonClass}>{t(locale, "Assign workers", "Assegna operatori")}</Link> : null}
               {canSign ? <Link href={`${detailHref}?signQuoteId=${quote.id}`} className={quotesPrimaryButtonClass}>{t(locale, "Sign", "Firma")}</Link> : null}
               {canRevertToDraft ? <Link href={`${detailHref}?revertQuoteId=${quote.id}`} className={quotesSecondaryButtonClass}>{t(locale, "Back to draft", "Torna in bozza")}</Link> : null}
-              {canMarkAsPaid ? <Link href={`${detailHref}?markPaidQuoteId=${quote.id}`} className={quotesPrimaryButtonClass}>{t(locale, "Mark as paid", "Segna come pagato")}</Link> : null}
+              {canMarkAsPaid ? <Link href={`${detailHref}?markPaidQuoteId=${quote.id}`} className={quotesPrimaryButtonClass}>{quote.billingMode === "postpaid" ? t(locale, "Convert (post-paid)", "Converti (post-pagato)") : t(locale, "Mark as paid", "Segna come pagato")}</Link> : null}
             </div>
           )}
           meta={[
             { label: t(locale, "Customer", "Cliente"), value: quote.customerName || t(locale, "Unknown", "Sconosciuto") },
+            { label: t(locale, "Billing", "Fatturazione"), value: quote.billingMode === "postpaid" ? t(locale, "Post-paid", "Post-pagato") : t(locale, "Prepaid", "Prepagato") },
             { label: t(locale, "Estimated", "Stimato"), value: formatQuoteHours(quote.totalEstimatedHours), tone: "accent" },
             { label: t(locale, "Logged", "Registrato"), value: formatQuoteHours(quote.totalLoggedHours) },
             { label: t(locale, "Updated", "Aggiornato"), value: formatDateTime(tag, quote.updatedAt) },

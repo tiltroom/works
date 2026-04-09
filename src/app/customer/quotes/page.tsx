@@ -132,7 +132,8 @@ export default async function CustomerQuotesPage({
                   {quotesData.quotes.map((quote) => {
                     const canEdit = quote.status === "draft";
                     const canDelete = quote.status === "draft";
-                    const canCheckout = quote.status === "signed" && !quote.linkedProjectId;
+                    const canCheckout = quote.status === "signed" && !quote.linkedProjectId && quote.billingMode !== "postpaid";
+                    const isPostPaidAwaiting = quote.status === "signed" && !quote.linkedProjectId && quote.billingMode === "postpaid";
 
                     return (
                       <tr key={quote.id} className="transition-colors hover:bg-accent/60">
@@ -156,6 +157,9 @@ export default async function CustomerQuotesPage({
                                 <input type="hidden" name="quoteId" value={quote.id} />
                                 <button className={quotesPrimaryButtonClass}>{t(locale, "Convert & prepay", "Converti e pre-paga")}</button>
                               </form>
+                            ) : null}
+                            {isPostPaidAwaiting ? (
+                              <span className="inline-flex items-center justify-center rounded-lg border border-border/70 bg-muted/50 px-3 py-2 text-sm text-muted-foreground">{t(locale, "Post-paid (admin converts)", "Post-pagato (admin converte)")}</span>
                             ) : null}
                           </div>
                         </td>
