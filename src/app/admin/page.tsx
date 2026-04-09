@@ -92,6 +92,18 @@ function formatAssignedRemainingHours(assignedHours: number, remainingHours: num
   return `${formatProjectHours(assignedHours)} / ${formatProjectHours(remainingHours)}`;
 }
 
+function formatProjectBillingBalance(
+  billingMode: string | null | undefined,
+  assignedHours: number,
+  remainingHours: number,
+  outstandingDebt: number,
+): string {
+  if (billingMode === "postpaid" && outstandingDebt > 0) {
+    return `${formatProjectHours(assignedHours)} credit / ${formatProjectHours(outstandingDebt)} debt`;
+  }
+  return formatAssignedRemainingHours(assignedHours, remainingHours);
+}
+
 function totalUsedHours(entries: ProjectTimeRow[]) {
   return entries.reduce((total, entry) => {
     if (!entry.ended_at) {
@@ -150,7 +162,7 @@ export default async function AdminPage({
     supabase.from("profiles").select("id,full_name,role").eq("role", "admin"),
     supabase
       .from("projects")
-      .select("id,name,description,assigned_hours,customer_id,profiles!projects_customer_id_fkey(full_name),project_workers(worker_id)"),
+      .select("id,name,description,assigned_hours,customer_id,billing_mode,profiles!projects_customer_id_fkey(full_name),project_workers(worker_id)"),
     supabase.from("time_entries").select("project_id,started_at,ended_at"),
     supabase.from("hour_purchases").select("id,project_id,hours_added,amount_cents,currency,payment_method,admin_comment,created_at").order("created_at", { ascending: false }),
     supabase
@@ -159,6 +171,16 @@ export default async function AdminPage({
       .order("created_at", { ascending: false }),
     adminClient.auth.admin.listUsers({ page: 1, perPage: 1000 }),
   ]);
+
+  const projectIds = (projects ?? []).map((p: Record<string, unknown>) => String(p.id));
+  let adminBillingSummaries: { project_id: string; outstanding_debt_hours: number }[] = [];
+  if (projectIds.length > 0) {
+    const { data: absData } = await supabase.from("project_billing_summary").select("project_id,outstanding_debt_hours").in("project_id", projectIds);
+    adminBillingSummaries = (absData ?? []) as { project_id: string; outstanding_debt_hours: number }[];
+  }
+  const adminDebtByProjectId = new Map<string, number>(
+    adminBillingSummaries.map((s) => [s.project_id, Number(s.outstanding_debt_hours ?? 0)]),
+  );
 
   const missingCustomerRateColumn = customerRatesError?.code === "PGRST204"
     || customerRatesError?.code === "42703"
@@ -466,15 +488,23 @@ export default async function AdminPage({
                           <td className="px-4 py-3 text-muted-foreground">{(project.profiles as { full_name?: string } | null)?.full_name || t(locale, "Unknown", "Sconosciuto")}</td>
                           <td className="px-4 py-3 text-muted-foreground">{formatAssignedWorkerNames(project.project_workers as ProjectWorkerAssignment[] | null, workersById)}</td>
                           <td className="px-4 py-3 text-right">
-                            <span className="inline-flex items-center rounded border border-border bg-background/65 px-2 py-0.5 text-xs font-medium text-foreground">
-                              {formatAssignedRemainingHours(
-                                Number(project.assigned_hours ?? 0),
-                                Math.max(
-                                  Number(project.assigned_hours ?? 0) - totalUsedHours(projectTimeEntriesByProjectId.get(project.id) ?? []),
-                                  0,
-                                ),
-                              )}
-                            </span>
+                            {(() => {
+                              const pBillingMode = (project as Record<string, unknown>).billing_mode as string | null | undefined;
+                              const pOutstandingDebt = adminDebtByProjectId.get(String(project.id)) ?? 0;
+                              return (
+                              <span className="inline-flex items-center rounded border border-border bg-background/65 px-2 py-0.5 text-xs font-medium text-foreground">
+                                {formatProjectBillingBalance(
+                                  pBillingMode,
+                                  Number(project.assigned_hours ?? 0),
+                                  Math.max(
+                                    Number(project.assigned_hours ?? 0) - totalUsedHours(projectTimeEntriesByProjectId.get(project.id) ?? []),
+                                    0,
+                                  ),
+                                  pOutstandingDebt,
+                                )}
+                              </span>
+                              );
+                            })()}
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center justify-end gap-2">

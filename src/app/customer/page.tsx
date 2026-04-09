@@ -14,6 +14,12 @@ interface CustomerProjectRow {
   id: string;
   name: string;
   assigned_hours: number;
+  billing_mode?: string | null;
+}
+
+interface BillingSummaryRow {
+  project_id: string;
+  outstanding_debt_hours: number;
 }
 
 interface ProjectTimeRow {
@@ -75,7 +81,7 @@ export default async function CustomerPage() {
   const supabase = await createClient();
 
   const [{ data: projects }, { data: purchases }] = await Promise.all([
-    supabase.from("projects").select("id,name,assigned_hours").eq("customer_id", profile.id),
+    supabase.from("projects").select("id,name,assigned_hours,billing_mode").eq("customer_id", profile.id),
     supabase
       .from("hour_purchases")
       .select("id,project_id,hours_added,amount_cents,currency,payment_method,admin_comment,created_at")
@@ -83,6 +89,16 @@ export default async function CustomerPage() {
   ]);
 
   const projectIds = (projects ?? []).map((project) => project.id);
+
+  let billingSummaries: BillingSummaryRow[] = [];
+  if (projectIds.length > 0) {
+    const { data: bsData } = await supabase.from("project_billing_summary").select("project_id,outstanding_debt_hours").in("project_id", projectIds);
+    billingSummaries = (bsData ?? []) as BillingSummaryRow[];
+  }
+
+  const debtByProjectId = new Map<string, number>(
+    billingSummaries.map((s) => [s.project_id, Number(s.outstanding_debt_hours ?? 0)]),
+  );
   const { data: timeEntries } = projectIds.length
     ? await supabase
         .from("time_entries")
@@ -145,19 +161,25 @@ export default async function CustomerPage() {
               const totalAssigned = Number(project.assigned_hours);
               const remaining = Math.max(0, totalAssigned - used);
               const usagePercent = totalAssigned > 0 ? Math.min(100, (used / totalAssigned) * 100) : 0;
+              const billingMode = project.billing_mode ?? null;
+              const isPostPaid = billingMode === "postpaid";
+              const outstandingDebt = debtByProjectId.get(project.id) ?? 0;
               
-              const isLowHours = remaining < 5 && remaining > 0;
-              const isOutOfHours = remaining <= 0;
+              const isLowHours = !isPostPaid && remaining < 5 && remaining > 0;
+              const isOutOfHours = !isPostPaid && remaining <= 0;
 
               return (
                 <div key={project.id} className={`${sectionCardClass} relative overflow-hidden p-6 md:p-8`}>
-                  <div className={`absolute top-0 inset-x-0 h-1 ${isOutOfHours ? 'bg-red-500' : isLowHours ? 'bg-amber-500' : 'bg-brand-500'}`}></div>
+                  <div className={`absolute top-0 inset-x-0 h-1 ${isPostPaid && outstandingDebt > 0 ? 'bg-orange-500' : isOutOfHours ? 'bg-red-500' : isLowHours ? 'bg-amber-500' : 'bg-brand-500'}`}></div>
                   
                   <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 mb-8">
                     <div className="flex-1">
-                      <h3 className="mb-4 text-2xl font-bold text-foreground">{project.name}</h3>
+                      <div className="mb-4 flex items-center gap-3">
+                        <h3 className="text-2xl font-bold text-foreground">{project.name}</h3>
+                        {isPostPaid ? <span className="inline-flex items-center rounded-full border border-orange-500/30 bg-orange-500/10 px-2.5 py-0.5 text-xs font-medium text-orange-700 dark:text-orange-300">{t(locale, "Post-paid", "Post-pagato")}</span> : null}
+                      </div>
                       
-                      <div className="grid grid-cols-3 gap-4 mb-4">
+                      <div className={`grid gap-4 mb-4 ${isPostPaid && outstandingDebt > 0 ? 'grid-cols-4' : 'grid-cols-3'}`}>
                         <div className={metricCardClass}>
                           <p className="mb-1 text-sm text-muted-foreground">{t(locale, "Assigned", "Assegnate")}</p>
                           <p className="text-xl font-semibold text-foreground">{hoursToMinutesWithHoursDisplay(totalAssigned)}</p>
@@ -172,6 +194,12 @@ export default async function CustomerPage() {
                             {hoursToMinutesWithHoursDisplay(remaining)}
                           </p>
                         </div>
+                        {isPostPaid && outstandingDebt > 0 ? (
+                          <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-4">
+                            <p className="mb-1 text-sm text-muted-foreground">{t(locale, "Outstanding debt", "Debito residuo")}</p>
+                            <p className="text-xl font-semibold text-orange-700 dark:text-orange-300">{hoursToMinutesWithHoursDisplay(outstandingDebt)}</p>
+                          </div>
+                        ) : null}
                       </div>
 
                       <div className="space-y-2">
