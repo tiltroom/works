@@ -542,27 +542,37 @@ export default async function AdminQuoteViewPage({
 
       {activeSwitchToPostpaidQuote ? (
         <QuoteActionModal
-          title={t(locale, "Switch quote to post-paid", "Converti il preventivo in post-pagato")}
+          title={t(locale, "Convert quote to post-paid project", "Converti il preventivo in progetto post-pagato")}
           closeHref={detailHref}
           successRedirectHref={detailHref}
           action={switchQuoteToPostpaidAction}
           closeLabel={t(locale, "Close", "Chiudi")}
           cancelLabel={t(locale, "Cancel", "Annulla")}
-          submitLabel={t(locale, "Switch billing mode", "Cambia modalità fatturazione")}
-          submittingLabel={t(locale, "Switching…", "Cambio in corso…")}
-          successMessage={t(locale, "Quote switched to post-paid", "Preventivo convertito in post-pagato")}
-          genericErrorMessage={t(locale, "Unable to switch quote to post-paid", "Impossibile convertire il preventivo in post-pagato")}
+          submitLabel={t(locale, "Convert to post-paid project", "Converti in progetto post-pagato")}
+          submittingLabel={t(locale, "Converting…", "Conversione in corso…")}
+          successMessage={t(locale, "Quote converted to post-paid project", "Preventivo convertito in progetto post-pagato")}
+          genericErrorMessage={t(locale, "Unable to convert quote as post-paid", "Impossibile convertire il preventivo come post-pagato")}
         >
           <input type="hidden" name="quoteId" value={activeSwitchToPostpaidQuote.id} />
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              {t(locale, "This changes the signed quote from prepaid to post-paid. After the switch, use the post-paid convert action to create the live project without a prepaid hours purchase.", "Questa azione cambia il preventivo firmato da prepagato a post-pagato. Dopo il cambio, usa l'azione di conversione post-pagata per creare il progetto attivo senza un acquisto di ore prepagate.")}
+              {t(locale, "This changes the signed quote from prepaid to post-paid and immediately creates the live project without a prepaid hours purchase.", "Questa azione cambia il preventivo firmato da prepagato a post-pagato e crea subito il progetto attivo senza un acquisto di ore prepagate.")}
             </p>
             <div className="rounded-xl border border-border/70 bg-background/60 px-4 py-3 text-sm text-muted-foreground">
               <p className="font-medium text-foreground">{activeSwitchToPostpaidQuote.title}</p>
               <p className="mt-1">{t(locale, "Current billing mode: Prepaid", "Modalità attuale: Prepagato")}</p>
-              <p className="mt-1">{t(locale, "New billing mode: Post-paid", "Nuova modalità: Post-pagato")}</p>
+              <p className="mt-1">{t(locale, "Result: billing mode becomes post-paid and the quote is converted into its project immediately.", "Risultato: la modalità diventa post-pagata e il preventivo viene convertito subito nel relativo progetto.")}</p>
               <p className="mt-1">{t(locale, "This is available only before any prepayment session starts.", "Questa opzione è disponibile solo prima che inizi qualsiasi sessione di prepagamento.")}</p>
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="admin-switch-postpaid-comment" className="text-sm font-medium text-foreground">{t(locale, "Internal note (optional)", "Nota interna (facoltativa)")}</label>
+              <textarea
+                id="admin-switch-postpaid-comment"
+                name="adminComment"
+                rows={3}
+                className={`${quotesInputClass} min-h-24`}
+                placeholder={t(locale, "Example: approved for post-paid rollout by admin review", "Esempio: approvato per passaggio a post-pagato dopo revisione admin")}
+              />
             </div>
           </div>
         </QuoteActionModal>
