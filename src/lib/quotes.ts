@@ -3,6 +3,8 @@ import type { Locale } from "@/lib/i18n";
 
 export type QuoteStatus = "draft" | "signed" | "converted";
 
+export type BillingMode = "prepaid" | "postpaid";
+
 export interface QuoteRecord {
   id: string;
   title: string;
@@ -10,6 +12,7 @@ export interface QuoteRecord {
   contentHtml: string | null;
   contentJson: JSONContent | null;
   status: QuoteStatus;
+  billingMode: BillingMode;
   customerId: string;
   customerName: string | null;
   totalEstimatedHours: number;
@@ -166,6 +169,7 @@ export function parseQuoteRecord(row: RawRecord): QuoteRecord {
     contentHtml: asNullableString(row.content_html),
     contentJson: asJsonContent(row.content_json),
     status: asQuoteStatus(row.status),
+    billingMode: row.billing_mode === "postpaid" ? "postpaid" : "prepaid",
     customerId: asString(row.customer_id),
     customerName: asNullableString(row.customer_name),
     totalEstimatedHours: asNumber(row.total_estimated_hours),

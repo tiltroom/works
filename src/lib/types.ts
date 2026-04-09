@@ -1,5 +1,7 @@
 export type AppRole = "admin" | "customer" | "worker";
 
+export type BillingMode = "prepaid" | "postpaid";
+
 export interface Profile {
   id: string;
   full_name: string | null;
@@ -13,6 +15,7 @@ export interface Project {
   description: string | null;
   customer_id: string;
   assigned_hours: number;
+  billing_mode: BillingMode;
   created_at: string;
 }
 
@@ -54,6 +57,7 @@ export interface Quote {
   content_html: string | null;
   content_json: Record<string, unknown> | null;
   status: QuoteStatus;
+  billing_mode: BillingMode;
   total_estimated_hours: number;
   total_logged_hours: number;
   signed_by_name: string | null;
@@ -116,4 +120,25 @@ export interface QuotePrepaymentSession {
   stripe_event_id: string | null;
   paid_at: string | null;
   created_at: string;
+}
+
+export interface ProjectDebtLedgerEntry {
+  id: string;
+  project_id: string;
+  event_type: "time_entry_accrual" | "time_entry_reversal" | "payment_settlement";
+  hours: number;
+  source_id: string | null;
+  source_type: "time_entry" | "stripe_event" | "manual_adjustment" | null;
+  source_event_id: string | null;
+  description: string | null;
+  created_at: string;
+}
+
+export interface ProjectBillingBalance {
+  project_id: string;
+  billing_mode: BillingMode;
+  prepaid_hours: number;
+  used_hours: number;
+  remaining_prepaid_hours: number;
+  outstanding_debt_hours: number;
 }
