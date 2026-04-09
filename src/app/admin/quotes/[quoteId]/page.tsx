@@ -10,6 +10,7 @@ import {
   markQuoteAsPaidAction,
   revertQuoteToDraftAction,
   signQuoteAction,
+  switchQuoteToPostpaidAction,
   updateQuoteSubtaskAction,
   updateQuoteSubtaskEntryAction,
 } from "@/app/actions/quotes";
@@ -53,7 +54,7 @@ export default async function AdminQuoteViewPage({
   searchParams,
 }: {
   params: Promise<{ quoteId: string }> | { quoteId: string };
-  searchParams?: Promise<{ assignWorkersId?: string; signQuoteId?: string; revertQuoteId?: string; markPaidQuoteId?: string; addSubtaskQuoteId?: string; editSubtaskId?: string; deleteSubtaskId?: string; entryQuoteId?: string; editEntryId?: string; deleteEntryId?: string; toast?: string; toastMessage?: string }> | { assignWorkersId?: string; signQuoteId?: string; revertQuoteId?: string; markPaidQuoteId?: string; addSubtaskQuoteId?: string; editSubtaskId?: string; deleteSubtaskId?: string; entryQuoteId?: string; editEntryId?: string; deleteEntryId?: string; toast?: string; toastMessage?: string };
+  searchParams?: Promise<{ assignWorkersId?: string; signQuoteId?: string; revertQuoteId?: string; switchToPostpaidQuoteId?: string; markPaidQuoteId?: string; addSubtaskQuoteId?: string; editSubtaskId?: string; deleteSubtaskId?: string; entryQuoteId?: string; editEntryId?: string; deleteEntryId?: string; toast?: string; toastMessage?: string }> | { assignWorkersId?: string; signQuoteId?: string; revertQuoteId?: string; switchToPostpaidQuoteId?: string; markPaidQuoteId?: string; addSubtaskQuoteId?: string; editSubtaskId?: string; deleteSubtaskId?: string; entryQuoteId?: string; editEntryId?: string; deleteEntryId?: string; toast?: string; toastMessage?: string };
 }) {
   const locale = await getLocale();
   const tag = localeTag(locale);
@@ -66,6 +67,7 @@ export default async function AdminQuoteViewPage({
   const assignWorkersId = paramsValue.assignWorkersId?.trim();
   const signQuoteId = paramsValue.signQuoteId?.trim();
   const revertQuoteId = paramsValue.revertQuoteId?.trim();
+  const switchToPostpaidQuoteId = paramsValue.switchToPostpaidQuoteId?.trim();
   const markPaidQuoteId = paramsValue.markPaidQuoteId?.trim();
   const addSubtaskQuoteId = paramsValue.addSubtaskQuoteId?.trim();
   const editSubtaskId = paramsValue.editSubtaskId?.trim();
@@ -99,15 +101,18 @@ export default async function AdminQuoteViewPage({
   const quotePrepaymentSessions = quotesData.prepaymentSessions.filter((session) => session.quoteId === quote.id);
   const latestPrepayment = quotesData.prepaymentSessions.find((session) => session.quoteId === quote.id) ?? null;
   const hasPrepaymentActivity = quotePrepaymentSessions.some((session) => session.status === "pending" || session.status === "paid");
+  const isPostPaid = quote.billingMode === "postpaid";
   const canAssignWorkers = quote.status === "draft";
   const canSign = quote.status === "draft";
   const canRevertToDraft = quote.status === "signed";
-  const canMarkAsPaid = quote.status === "signed" && !quote.linkedProjectName && !hasPrepaymentActivity;
+  const canSwitchToPostpaid = quote.status === "signed" && !quote.linkedProjectName && !isPostPaid && !hasPrepaymentActivity;
+  const canMarkAsPaid = quote.status === "signed" && !quote.linkedProjectName && (isPostPaid || !hasPrepaymentActivity);
   const canManageSubtasks = quote.status === "draft";
   const canManageEntries = quote.status === "draft";
   const activeAssignQuote = canAssignWorkers && assignWorkersId === quote.id ? quote : null;
   const activeSignQuote = signQuoteId === quote.id ? quote : null;
   const activeRevertQuote = canRevertToDraft && revertQuoteId === quote.id ? quote : null;
+  const activeSwitchToPostpaidQuote = canSwitchToPostpaid && switchToPostpaidQuoteId === quote.id ? quote : null;
   const activeMarkPaidQuote = canMarkAsPaid && markPaidQuoteId === quote.id ? quote : null;
   const activeAddSubtaskQuote = addSubtaskQuoteId === quote.id ? quote : null;
   const activeEditSubtask = subtasks.find((subtask) => subtask.id === editSubtaskId) ?? null;
@@ -155,7 +160,8 @@ export default async function AdminQuoteViewPage({
               {canAssignWorkers ? <Link href={`${detailHref}?assignWorkersId=${quote.id}`} className={quotesSecondaryButtonClass}>{t(locale, "Assign workers", "Assegna operatori")}</Link> : null}
               {canSign ? <Link href={`${detailHref}?signQuoteId=${quote.id}`} className={quotesPrimaryButtonClass}>{t(locale, "Sign", "Firma")}</Link> : null}
               {canRevertToDraft ? <Link href={`${detailHref}?revertQuoteId=${quote.id}`} className={quotesSecondaryButtonClass}>{t(locale, "Back to draft", "Torna in bozza")}</Link> : null}
-              {canMarkAsPaid ? <Link href={`${detailHref}?markPaidQuoteId=${quote.id}`} className={quotesPrimaryButtonClass}>{quote.billingMode === "postpaid" ? t(locale, "Convert (post-paid)", "Converti (post-pagato)") : t(locale, "Mark as paid", "Segna come pagato")}</Link> : null}
+              {canSwitchToPostpaid ? <Link href={`${detailHref}?switchToPostpaidQuoteId=${quote.id}`} className={quotesSecondaryButtonClass}>{t(locale, "Switch to post-paid", "Converti in post-pagato")}</Link> : null}
+              {canMarkAsPaid ? <Link href={`${detailHref}?markPaidQuoteId=${quote.id}`} className={quotesPrimaryButtonClass}>{quote.billingMode === "postpaid" ? t(locale, "Convert (post-paid)", "Converti (post-pagato)") : t(locale, "Mark as (pre)paid", "Segna come (pre) pagato")}</Link> : null}
             </div>
           )}
           meta={[
@@ -200,7 +206,7 @@ export default async function AdminQuoteViewPage({
 
           <QuotesSectionCard title={t(locale, "Prepayment / conversion", "Prepagamento / conversione")}>
             <div className="space-y-3 text-sm text-muted-foreground">
-              <p>{quote.linkedProjectName ? t(locale, "Converted into project", "Convertito nel progetto") : t(locale, "Awaiting checkout conversion after sign-off.", "In attesa del checkout di conversione dopo la firma.")}</p>
+              <p>{quote.linkedProjectName ? t(locale, "Converted into project", "Convertito nel progetto") : isPostPaid ? t(locale, "Awaiting admin conversion after sign-off.", "In attesa della conversione admin dopo la firma.") : t(locale, "Awaiting checkout conversion after sign-off.", "In attesa del checkout di conversione dopo la firma.")}</p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-xl border border-border/70 bg-background/60 px-3 py-3">
                   <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{t(locale, "Latest prepayment", "Ultimo prepagamento")}</p>
@@ -534,27 +540,59 @@ export default async function AdminQuoteViewPage({
         </QuoteActionModal>
       ) : null}
 
+      {activeSwitchToPostpaidQuote ? (
+        <QuoteActionModal
+          title={t(locale, "Switch quote to post-paid", "Converti il preventivo in post-pagato")}
+          closeHref={detailHref}
+          successRedirectHref={detailHref}
+          action={switchQuoteToPostpaidAction}
+          closeLabel={t(locale, "Close", "Chiudi")}
+          cancelLabel={t(locale, "Cancel", "Annulla")}
+          submitLabel={t(locale, "Switch billing mode", "Cambia modalità fatturazione")}
+          submittingLabel={t(locale, "Switching…", "Cambio in corso…")}
+          successMessage={t(locale, "Quote switched to post-paid", "Preventivo convertito in post-pagato")}
+          genericErrorMessage={t(locale, "Unable to switch quote to post-paid", "Impossibile convertire il preventivo in post-pagato")}
+        >
+          <input type="hidden" name="quoteId" value={activeSwitchToPostpaidQuote.id} />
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {t(locale, "This changes the signed quote from prepaid to post-paid. After the switch, use the post-paid convert action to create the live project without a prepaid hours purchase.", "Questa azione cambia il preventivo firmato da prepagato a post-pagato. Dopo il cambio, usa l'azione di conversione post-pagata per creare il progetto attivo senza un acquisto di ore prepagate.")}
+            </p>
+            <div className="rounded-xl border border-border/70 bg-background/60 px-4 py-3 text-sm text-muted-foreground">
+              <p className="font-medium text-foreground">{activeSwitchToPostpaidQuote.title}</p>
+              <p className="mt-1">{t(locale, "Current billing mode: Prepaid", "Modalità attuale: Prepagato")}</p>
+              <p className="mt-1">{t(locale, "New billing mode: Post-paid", "Nuova modalità: Post-pagato")}</p>
+              <p className="mt-1">{t(locale, "This is available only before any prepayment session starts.", "Questa opzione è disponibile solo prima che inizi qualsiasi sessione di prepagamento.")}</p>
+            </div>
+          </div>
+        </QuoteActionModal>
+      ) : null}
+
       {activeMarkPaidQuote ? (
         <QuoteActionModal
-          title={t(locale, "Mark quote as paid", "Segna il preventivo come pagato")}
+          title={activeMarkPaidQuote.billingMode === "postpaid" ? t(locale, "Convert post-paid quote", "Converti preventivo post-pagato") : t(locale, "Mark quote as paid", "Segna il preventivo come pagato")}
           closeHref={detailHref}
           successRedirectHref={detailHref}
           action={markQuoteAsPaidAction}
           closeLabel={t(locale, "Close", "Chiudi")}
           cancelLabel={t(locale, "Cancel", "Annulla")}
-          submitLabel={t(locale, "Mark as paid", "Segna come pagato")}
+          submitLabel={activeMarkPaidQuote.billingMode === "postpaid" ? t(locale, "Convert quote", "Converti preventivo") : t(locale, "Mark as (pre)paid", "Segna come (pre) pagato")}
           submittingLabel={t(locale, "Processing…", "Elaborazione in corso…")}
-          successMessage={t(locale, "Quote marked as paid", "Preventivo segnato come pagato")}
-          genericErrorMessage={t(locale, "Unable to mark quote as paid", "Impossibile segnare il preventivo come pagato")}
+          successMessage={activeMarkPaidQuote.billingMode === "postpaid" ? t(locale, "Post-paid quote converted", "Preventivo post-pagato convertito") : t(locale, "Quote marked as paid", "Preventivo segnato come pagato")}
+          genericErrorMessage={activeMarkPaidQuote.billingMode === "postpaid" ? t(locale, "Unable to convert post-paid quote", "Impossibile convertire il preventivo post-pagato") : t(locale, "Unable to mark quote as paid", "Impossibile segnare il preventivo come pagato")}
         >
           <input type="hidden" name="quoteId" value={activeMarkPaidQuote.id} />
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              {t(locale, "This skips Stripe checkout and immediately converts the signed quote into a live project with the estimated hours credited as a manual payment entry.", "Questa azione salta il checkout Stripe e converte subito il preventivo firmato in un progetto attivo, accreditando le ore stimate come voce di pagamento manuale.")}
+                {activeMarkPaidQuote.billingMode === "postpaid"
+                  ? t(locale, "This immediately converts the signed post-paid quote into a live project without creating a prepaid hours purchase.", "Questa azione converte subito il preventivo post-pagato firmato in un progetto attivo senza creare un acquisto di ore prepagate.")
+                  : t(locale, "This skips Stripe checkout and immediately converts the signed quote into a live project with the estimated hours credited as a manual payment entry.", "Questa azione salta il checkout Stripe e converte subito il preventivo firmato in un progetto attivo, accreditando le ore stimate come voce di pagamento manuale.")}
             </p>
             <div className="rounded-xl border border-border/70 bg-background/60 px-4 py-3 text-sm text-muted-foreground">
               <p className="font-medium text-foreground">{activeMarkPaidQuote.title}</p>
-              <p className="mt-1">{t(locale, "Use this only when the customer has already settled the quote outside the platform and no Stripe prepayment has started.", "Usa questa azione solo quando il cliente ha già saldato il preventivo fuori piattaforma e non è stato avviato alcun prepagamento Stripe.")}</p>
+                <p className="mt-1">{activeMarkPaidQuote.billingMode === "postpaid"
+                  ? t(locale, "Use this to convert a signed post-paid quote into its project once admin review is complete.", "Usa questa azione per convertire un preventivo post-pagato firmato nel relativo progetto una volta completata la revisione admin.")
+                  : t(locale, "Use this only when the customer has already settled the quote outside the platform and no Stripe prepayment has started.", "Usa questa azione solo quando il cliente ha già saldato il preventivo fuori piattaforma e non è stato avviato alcun prepagamento Stripe.")}</p>
             </div>
             <div className="space-y-1.5">
               <label htmlFor="admin-mark-paid-comment" className="text-sm font-medium text-foreground">{t(locale, "Internal note (optional)", "Nota interna (facoltativa)")}</label>
