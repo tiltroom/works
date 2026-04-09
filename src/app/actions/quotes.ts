@@ -940,6 +940,55 @@ export async function revertQuoteToDraftAction(formData: FormData) {
   revalidateQuotesModule(quoteId);
 }
 
+export async function switchQuoteToPostpaidAction(formData: FormData) {
+  const locale = await getLocale();
+  await requireRole(["admin"]);
+  const quoteId = trimString(formData, "quoteId");
+
+  if (!quoteId) {
+    throw new Error(t(locale, "Quote id is required", "L'ID del preventivo è obbligatorio"));
+  }
+
+  const existing = await getQuoteForAdmin(quoteId);
+  if (existing.status !== "signed") {
+    throw new Error(t(locale, "Only signed quotes can be switched to post-paid", "Solo i preventivi firmati possono essere convertiti in post-pagato"));
+  }
+
+  if (existing.billingMode === "postpaid") {
+    throw new Error(t(locale, "Quote is already post-paid", "Il preventivo è già post-pagato"));
+  }
+
+  if (existing.linkedProjectId) {
+    throw new Error(t(locale, "Quote already converted", "Preventivo già convertito"));
+  }
+
+  const supabase = await assertQuotesBackend();
+  const { data: prepaymentSessions, error: prepaymentError } = await supabase
+    .from("quote_prepayment_sessions")
+    .select("id")
+    .eq("quote_id", quoteId)
+    .in("status", ["pending", "paid"]);
+
+  if (prepaymentError) {
+    throw new Error(prepaymentError.message);
+  }
+
+  if ((prepaymentSessions ?? []).length > 0) {
+    throw new Error(t(locale, "Quotes with prepayment activity cannot be switched to post-paid", "I preventivi con attività di prepagamento non possono essere convertiti in post-pagato"));
+  }
+
+  const { error } = await supabase
+    .from("quotes")
+    .update({ billing_mode: "postpaid", updated_at: new Date().toISOString() })
+    .eq("id", quoteId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  revalidateQuotesModule(quoteId);
+}
+
 export async function markQuoteAsPaidAction(formData: FormData) {
   const locale = await getLocale();
   await requireRole(["admin"]);
@@ -965,19 +1014,21 @@ export async function markQuoteAsPaidAction(formData: FormData) {
     throw new Error(t(locale, "Estimated hours must be greater than zero", "Le ore stimate devono essere maggiori di zero"));
   }
 
-  const supabase = await assertQuotesBackend();
-  const { data: prepaymentSessions, error: prepaymentError } = await supabase
-    .from("quote_prepayment_sessions")
-    .select("id")
-    .eq("quote_id", quoteId)
-    .in("status", ["pending", "paid"]);
+  if (!isPostPaid) {
+    const supabase = await assertQuotesBackend();
+    const { data: prepaymentSessions, error: prepaymentError } = await supabase
+      .from("quote_prepayment_sessions")
+      .select("id")
+      .eq("quote_id", quoteId)
+      .in("status", ["pending", "paid"]);
 
-  if (prepaymentError) {
-    throw new Error(prepaymentError.message);
-  }
+    if (prepaymentError) {
+      throw new Error(prepaymentError.message);
+    }
 
-  if ((prepaymentSessions ?? []).length > 0) {
-    throw new Error(t(locale, "Quotes with prepayment activity cannot be manually marked as paid", "I preventivi con attività di prepagamento non possono essere segnati manualmente come pagati"));
+    if ((prepaymentSessions ?? []).length > 0) {
+      throw new Error(t(locale, "Quotes with prepayment activity cannot be manually marked as paid", "I preventivi con attività di prepagamento non possono essere segnati manualmente come pagati"));
+    }
   }
 
   const admin = createAdminClient();
@@ -1000,7 +1051,7 @@ export async function markQuoteAsPaidAction(formData: FormData) {
       throw new Error(t(locale, "Estimated hours must be greater than zero", "Le ore stimate devono essere maggiori di zero"));
     }
 
-    if (error.message.includes("quote_has_prepayment_activity")) {
+    if (!isPostPaid && error.message.includes("quote_has_prepayment_activity")) {
       throw new Error(t(locale, "Quotes with prepayment activity cannot be manually marked as paid", "I preventivi con attività di prepagamento non possono essere segnati manualmente come pagati"));
     }
 
