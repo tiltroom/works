@@ -29,19 +29,46 @@ vi.mock("@/lib/auth", () => ({
   requireRole: mockRequireRole,
 }));
 
-vi.mock("@/lib/i18n-server", () => ({
+vi.mock("@/lib/i18n", () => ({
   getLocale: mockGetLocale,
+  t: (_locale: string, en: string, _it: string) => en,
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: mockCreateClient,
 }));
 
-function createMockSupabaseForQuoteComments(quoteStatus: "draft" | "signed" | "converted") {
+vi.mock("@/lib/i18n-server", () => ({
+  getLocale: mockGetLocale,
+}));
+
+function createMockSupabaseForQuoteComments(
+  quoteStatus: "draft" | "signed" | "converted",
+  options?: { authorId?: string; authorRole?: "admin" | "customer" | "worker" },
+) {
   const insert = vi.fn().mockResolvedValue({ error: null });
+  const update = vi.fn().mockReturnValue({
+    eq: vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    }),
+  });
+
+  const quoteData = {
+    id: "quote-1",
+    title: "Test quote",
+    status: quoteStatus,
+    customer_id: "customer-1",
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    linked_project_id: quoteStatus === "converted" ? "project-1" : null,
+    confirmed_at: quoteStatus === "signed" || quoteStatus === "converted" ? "2026-04-08T09:10:00.000Z" : null,
+    conversion_requested_at: quoteStatus === "converted" ? "2026-04-08T10:00:00.000Z" : null,
+    prepayment_requested_at: quoteStatus === "signed" ? "2026-04-08T09:15:00.000Z" : null,
+  };
 
   return {
     insert,
+    update,
     client: {
       from(table: string) {
         if (table === "quotes") {
@@ -59,14 +86,7 @@ function createMockSupabaseForQuoteComments(quoteStatus: "draft" | "signed" | "c
                   return this;
                 },
                 maybeSingle: vi.fn().mockImplementation(async () => ({
-                  data: {
-                    id: String(filters.get("id") ?? "quote-1"),
-                    title: "Test quote",
-                    status: quoteStatus,
-                    customer_id: "customer-1",
-                    created_at: "2026-01-01T00:00:00Z",
-                    updated_at: "2026-01-01T00:00:00Z",
-                  },
+                  data: { ...quoteData, id: String(filters.get("id") ?? "quote-1") },
                   error: null,
                 })),
               };
@@ -93,6 +113,27 @@ function createMockSupabaseForQuoteComments(quoteStatus: "draft" | "signed" | "c
         if (table === "quote_comments") {
           return {
             insert,
+            update,
+            select() {
+              return {
+                eq() {
+                  return this;
+                },
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: {
+                    id: "comment-1",
+                    quote_id: "quote-1",
+                    author_id: options?.authorId ?? "current-user",
+                    author_role: options?.authorRole ?? "worker",
+                    comment_html: "<p>Original comment</p>",
+                    comment_json: null,
+                    created_at: "2026-01-01T00:00:00Z",
+                    updated_at: "2026-01-01T00:00:00Z",
+                  },
+                  error: null,
+                }),
+              };
+            },
           };
         }
 
@@ -104,7 +145,6 @@ function createMockSupabaseForQuoteComments(quoteStatus: "draft" | "signed" | "c
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.resetModules();
   mockGetLocale.mockResolvedValue("en");
 });
 
@@ -169,24 +209,30 @@ describe("quotes helpers", () => {
     expect(isQuotesBackendMissingError({ code: "23505", message: "duplicate key value violates unique constraint" })).toBe(false);
   });
 
-  it("blocks worker quote comments once the quote leaves draft", async () => {
-    const { client, insert } = createMockSupabaseForQuoteComments("signed");
+  it("allows worker quote comments on signed quotes (status gating removed)", async () => {
     mockRequireRole.mockResolvedValue({ id: "worker-1", role: "worker" });
+    const { client, insert } = createMockSupabaseForQuoteComments("signed");
     mockCreateClient.mockResolvedValue(client);
 
     const { addQuoteCommentAction } = await import("@/app/actions/quotes");
     const formData = new FormData();
     formData.set("quoteId", "quote-1");
-    formData.set("commentHtml", "<p>Blocked comment</p>");
+    formData.set("commentHtml", "<p>Allowed on signed quote</p>");
 
-    await expect(addQuoteCommentAction(formData)).rejects.toThrow("Comments can only be added while the quote is in draft");
-    expect(insert).not.toHaveBeenCalled();
-    expect(mockRevalidatePath).not.toHaveBeenCalled();
+    await expect(addQuoteCommentAction(formData)).resolves.toBeUndefined();
+    expect(insert).toHaveBeenCalledWith({
+      author_id: "worker-1",
+      author_role: "worker",
+      comment_html: "<p>Allowed on signed quote</p>",
+      comment_json: null,
+      quote_id: "quote-1",
+    });
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/worker/quotes/quote-1");
   });
 
   it("allows worker quote comments while the quote is still draft", async () => {
-    const { client, insert } = createMockSupabaseForQuoteComments("draft");
     mockRequireRole.mockResolvedValue({ id: "worker-1", role: "worker" });
+    const { client, insert } = createMockSupabaseForQuoteComments("draft");
     mockCreateClient.mockResolvedValue(client);
 
     const { addQuoteCommentAction } = await import("@/app/actions/quotes");
@@ -203,6 +249,484 @@ describe("quotes helpers", () => {
       quote_id: "quote-1",
     });
     expect(mockRevalidatePath).toHaveBeenCalledWith("/worker/quotes/quote-1");
+  });
+
+  it("allows customer quote comments on signed quotes", async () => {
+    mockRequireRole.mockResolvedValue({ id: "customer-1", role: "customer" });
+    const { client, insert } = createMockSupabaseForQuoteComments("signed");
+    mockCreateClient.mockResolvedValue(client);
+
+    const { addQuoteCommentAction } = await import("@/app/actions/quotes");
+    const formData = new FormData();
+    formData.set("quoteId", "quote-1");
+    formData.set("commentHtml", "<p>Customer comment on signed quote</p>");
+
+    await expect(addQuoteCommentAction(formData)).resolves.toBeUndefined();
+    expect(insert).toHaveBeenCalledWith({
+      author_id: "customer-1",
+      author_role: "customer",
+      comment_html: "<p>Customer comment on signed quote</p>",
+      comment_json: null,
+      quote_id: "quote-1",
+    });
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/customer/quotes/quote-1");
+  });
+
+  it("allows admin quote comments on signed quotes", async () => {
+    mockRequireRole.mockResolvedValue({ id: "admin-1", role: "admin" });
+    const { client, insert } = createMockSupabaseForQuoteComments("signed");
+    mockCreateClient.mockResolvedValue(client);
+
+    const { addQuoteCommentAction } = await import("@/app/actions/quotes");
+    const formData = new FormData();
+    formData.set("quoteId", "quote-1");
+    formData.set("commentHtml", "<p>Admin comment on signed quote</p>");
+
+    await expect(addQuoteCommentAction(formData)).resolves.toBeUndefined();
+    expect(insert).toHaveBeenCalledWith({
+      author_id: "admin-1",
+      author_role: "admin",
+      comment_html: "<p>Admin comment on signed quote</p>",
+      comment_json: null,
+      quote_id: "quote-1",
+    });
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/admin/quotes/quote-1");
+  });
+
+  it("allows customer quote comments on draft quotes", async () => {
+    mockRequireRole.mockResolvedValue({ id: "customer-1", role: "customer" });
+    const { client, insert } = createMockSupabaseForQuoteComments("draft");
+    mockCreateClient.mockResolvedValue(client);
+
+    const { addQuoteCommentAction } = await import("@/app/actions/quotes");
+    const formData = new FormData();
+    formData.set("quoteId", "quote-1");
+    formData.set("commentHtml", "<p>Customer comment on draft</p>");
+
+    await expect(addQuoteCommentAction(formData)).resolves.toBeUndefined();
+    expect(insert).toHaveBeenCalledWith({
+      author_id: "customer-1",
+      author_role: "customer",
+      comment_html: "<p>Customer comment on draft</p>",
+      comment_json: null,
+      quote_id: "quote-1",
+    });
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/customer/quotes/quote-1");
+  });
+
+  it("allows admin quote comments on converted quotes (post-signature state)", async () => {
+    mockRequireRole.mockResolvedValue({ id: "admin-1", role: "admin" });
+    const { client, insert } = createMockSupabaseForQuoteComments("converted");
+    mockCreateClient.mockResolvedValue(client);
+
+    const { addQuoteCommentAction } = await import("@/app/actions/quotes");
+    const formData = new FormData();
+    formData.set("quoteId", "quote-1");
+    formData.set("commentHtml", "<p>Admin comment on converted quote</p>");
+
+    await expect(addQuoteCommentAction(formData)).resolves.toBeUndefined();
+    expect(insert).toHaveBeenCalledWith({
+      author_id: "admin-1",
+      author_role: "admin",
+      comment_html: "<p>Admin comment on converted quote</p>",
+      comment_json: null,
+      quote_id: "quote-1",
+    });
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/admin/quotes/quote-1");
+  });
+
+  it("allows worker to edit own comment on signed quotes", async () => {
+    mockRequireRole.mockResolvedValue({ id: "worker-1", role: "worker" });
+    const { client, update } = createMockSupabaseForQuoteComments("signed", { authorId: "worker-1", authorRole: "worker" });
+    mockCreateClient.mockResolvedValue(client);
+
+    const { updateQuoteCommentAction } = await import("@/app/actions/quotes");
+    const formData = new FormData();
+    formData.set("quoteId", "quote-1");
+    formData.set("commentId", "comment-1");
+    formData.set("commentHtml", "<p>Edited worker comment on signed quote</p>");
+
+    await expect(updateQuoteCommentAction(formData)).resolves.toBeUndefined();
+    expect(update).toHaveBeenCalled();
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/worker/quotes/quote-1");
+  });
+
+  it("allows worker to edit own comment on converted quotes (post-signature state)", async () => {
+    mockRequireRole.mockResolvedValue({ id: "worker-1", role: "worker" });
+    const { client, update } = createMockSupabaseForQuoteComments("converted", { authorId: "worker-1", authorRole: "worker" });
+    mockCreateClient.mockResolvedValue(client);
+
+    const { updateQuoteCommentAction } = await import("@/app/actions/quotes");
+    const formData = new FormData();
+    formData.set("quoteId", "quote-1");
+    formData.set("commentId", "comment-1");
+    formData.set("commentHtml", "<p>Edited worker comment on converted quote</p>");
+
+    await expect(updateQuoteCommentAction(formData)).resolves.toBeUndefined();
+    expect(update).toHaveBeenCalled();
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/worker/quotes/quote-1");
+  });
+
+  it("allows customer to edit own comment on signed quotes", async () => {
+    mockRequireRole.mockResolvedValue({ id: "customer-1", role: "customer" });
+    const { client, update } = createMockSupabaseForQuoteComments("signed", { authorId: "customer-1", authorRole: "customer" });
+    mockCreateClient.mockResolvedValue(client);
+
+    const { updateQuoteCommentAction } = await import("@/app/actions/quotes");
+    const formData = new FormData();
+    formData.set("quoteId", "quote-1");
+    formData.set("commentId", "comment-1");
+    formData.set("commentHtml", "<p>Edited customer comment</p>");
+
+    await expect(updateQuoteCommentAction(formData)).resolves.toBeUndefined();
+    expect(update).toHaveBeenCalled();
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/customer/quotes/quote-1");
+  });
+
+  it("allows admin to edit own comment on converted quotes (post-signature state)", async () => {
+    mockRequireRole.mockResolvedValue({ id: "admin-1", role: "admin" });
+    const { client, update } = createMockSupabaseForQuoteComments("converted", { authorId: "admin-1", authorRole: "admin" });
+    mockCreateClient.mockResolvedValue(client);
+
+    const { updateQuoteCommentAction } = await import("@/app/actions/quotes");
+    const formData = new FormData();
+    formData.set("quoteId", "quote-1");
+    formData.set("commentId", "comment-1");
+    formData.set("commentHtml", "<p>Admin edited comment on converted quote</p>");
+
+    await expect(updateQuoteCommentAction(formData)).resolves.toBeUndefined();
+    expect(update).toHaveBeenCalled();
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/admin/quotes/quote-1");
+  });
+
+  it("prevents worker from editing another user's comment on signed quotes", async () => {
+    mockRequireRole.mockResolvedValue({ id: "worker-1", role: "worker" });
+    const { client } = createMockSupabaseForQuoteComments("signed");
+    mockCreateClient.mockResolvedValue(client);
+
+    const { updateQuoteCommentAction } = await import("@/app/actions/quotes");
+    const formData = new FormData();
+    formData.set("quoteId", "quote-1");
+    formData.set("commentId", "comment-other");
+    formData.set("commentHtml", "<p>Attempted edit</p>");
+
+    await expect(updateQuoteCommentAction(formData)).rejects.toThrow("You can only edit your own comments");
+  });
+
+  it("rejects comment add when the quote does not exist or is not accessible to the caller", async () => {
+    mockRequireRole.mockResolvedValue({ id: "worker-1", role: "worker" });
+    const { client, insert } = createMockSupabaseForQuoteComments("signed");
+    client.from = vi.fn((table: string) => {
+      if (table === "quotes") {
+        return {
+          select() {
+            return {
+              eq() {
+                return this;
+              },
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: { code: "PGRST116", message: "Query returned no rows" } }),
+            };
+          },
+        };
+      }
+      if (table === "quote_workers") {
+        return {
+          select() {
+            return {
+              eq() {
+                return this;
+              },
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+            };
+          },
+        };
+      }
+      if (table === "quote_comments") {
+        return { insert };
+      }
+      throw new Error(`Unexpected table ${table}`);
+    }) as typeof client.from;
+    mockCreateClient.mockResolvedValue(client);
+
+    const { addQuoteCommentAction } = await import("@/app/actions/quotes");
+    const formData = new FormData();
+    formData.set("quoteId", "nonexistent-quote");
+    formData.set("commentHtml", "<p>This should be rejected</p>");
+
+    await expect(addQuoteCommentAction(formData)).rejects.toThrow();
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it("rejects comment add when the caller has no worker assignment and is not admin", async () => {
+    mockRequireRole.mockResolvedValue({ id: "worker-unassigned", role: "worker" });
+    const { client, insert } = createMockSupabaseForQuoteComments("signed");
+    client.from = vi.fn((table: string) => {
+      if (table === "quotes") {
+        return {
+          select() {
+            return {
+              eq() {
+                return this;
+              },
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: "quote-1",
+                  title: "Test quote",
+                  status: "signed",
+                  customer_id: "customer-1",
+                  created_at: "2026-01-01T00:00:00Z",
+                  updated_at: "2026-01-01T00:00:00Z",
+                  linked_project_id: null,
+                  confirmed_at: "2026-04-08T09:10:00.000Z",
+                  conversion_requested_at: null,
+                  prepayment_requested_at: null,
+                },
+                error: null,
+              }),
+            };
+          },
+        };
+      }
+      if (table === "quote_workers") {
+        return {
+          select() {
+            return {
+              eq() {
+                return this;
+              },
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+            };
+          },
+        };
+      }
+      if (table === "quote_comments") {
+        return { insert };
+      }
+      throw new Error(`Unexpected table ${table}`);
+    }) as typeof client.from;
+    mockCreateClient.mockResolvedValue(client);
+
+    const { addQuoteCommentAction } = await import("@/app/actions/quotes");
+    const formData = new FormData();
+    formData.set("quoteId", "quote-1");
+    formData.set("commentHtml", "<p>Unassigned worker attempting to comment</p>");
+
+    await expect(addQuoteCommentAction(formData)).rejects.toThrow();
+  });
+
+  it("rejects customer comment add when the quote belongs to a different customer", async () => {
+    mockRequireRole.mockResolvedValue({ id: "customer-other", role: "customer" });
+    const { client, insert } = createMockSupabaseForQuoteComments("signed");
+    client.from = vi.fn((table: string) => {
+      if (table === "quotes") {
+        return {
+          select() {
+            return {
+              eq() {
+                return this;
+              },
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+            };
+          },
+        };
+      }
+      if (table === "quote_comments") {
+        return { insert };
+      }
+      throw new Error(`Unexpected table ${table}`);
+    }) as typeof client.from;
+    mockCreateClient.mockResolvedValue(client);
+
+    const { addQuoteCommentAction } = await import("@/app/actions/quotes");
+    const formData = new FormData();
+    formData.set("quoteId", "quote-1");
+    formData.set("commentHtml", "<p>Unauthorized customer attempting to comment</p>");
+
+    await expect(addQuoteCommentAction(formData)).rejects.toThrow();
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it("allows comment add on a quote in post-signature billing state with confirmedAt and prepaymentRequestedAt populated", async () => {
+    const fixture = createBillingScenarioFixture({ quote: { status: "signed" } });
+    mockRequireRole.mockResolvedValue({ id: "worker-1", role: "worker" });
+
+    const { client, insert } = createMockSupabaseForQuoteComments("signed");
+    client.from = vi.fn((table: string) => {
+      if (table === "quotes") {
+        return {
+          select() {
+            return {
+              eq() {
+                return this;
+              },
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: fixture.quote.id,
+                  title: fixture.quote.title,
+                  status: fixture.quote.status,
+                  billing_mode: fixture.quote.billingMode,
+                  customer_id: fixture.quote.customerId,
+                  created_at: fixture.quote.createdAt,
+                  updated_at: fixture.quote.updatedAt,
+                  linked_project_id: null,
+                  confirmed_at: fixture.quote.confirmedAt,
+                  conversion_requested_at: fixture.quote.conversionRequestedAt,
+                  prepayment_requested_at: fixture.quote.prepaymentRequestedAt,
+                },
+                error: null,
+              }),
+            };
+          },
+        };
+      }
+      if (table === "quote_workers") {
+        return {
+          select() {
+            return {
+              eq() {
+                return this;
+              },
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { quote_id: fixture.quote.id },
+                error: null,
+              }),
+            };
+          },
+        };
+      }
+      if (table === "quote_comments") {
+        return { insert };
+      }
+      throw new Error(`Unexpected table ${table}`);
+    }) as typeof client.from;
+    mockCreateClient.mockResolvedValue(client);
+
+    const { addQuoteCommentAction } = await import("@/app/actions/quotes");
+    const formData = new FormData();
+    formData.set("quoteId", fixture.quote.id);
+    formData.set("commentHtml", "<p>Comment on post-signature quote with confirmedAt</p>");
+
+    await expect(addQuoteCommentAction(formData)).resolves.toBeUndefined();
+    expect(insert).toHaveBeenCalledWith({
+      author_id: "worker-1",
+      author_role: "worker",
+      comment_html: "<p>Comment on post-signature quote with confirmedAt</p>",
+      comment_json: null,
+      quote_id: fixture.quote.id,
+    });
+  });
+
+  it("allows comment add on a converted quote with linkedProjectId set (postpay converted state)", async () => {
+    mockRequireRole.mockResolvedValue({ id: "admin-1", role: "admin" });
+    const { client, insert } = createMockSupabaseForQuoteComments("converted");
+    client.from = vi.fn((table: string) => {
+      if (table === "quotes") {
+        return {
+          select() {
+            return {
+              eq() {
+                return this;
+              },
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: "quote-converted-001",
+                  title: "Converted postpaid quote",
+                  status: "converted",
+                  billing_mode: "postpaid",
+                  customer_id: "customer-1",
+                  created_at: "2026-04-01T00:00:00Z",
+                  updated_at: "2026-04-10T00:00:00Z",
+                  linked_project_id: "project-001",
+                  confirmed_at: "2026-04-08T09:10:00.000Z",
+                  conversion_requested_at: "2026-04-09T10:00:00.000Z",
+                  prepayment_requested_at: null,
+                  converted_at: "2026-04-10T00:00:00Z",
+                },
+                error: null,
+              }),
+            };
+          },
+        };
+      }
+      if (table === "quote_comments") {
+        return { insert };
+      }
+      throw new Error(`Unexpected table ${table}`);
+    }) as typeof client.from;
+    mockCreateClient.mockResolvedValue(client);
+
+    const { addQuoteCommentAction } = await import("@/app/actions/quotes");
+    const formData = new FormData();
+    formData.set("quoteId", "quote-converted-001");
+    formData.set("commentHtml", "<p>Comment on converted postpaid quote</p>");
+
+    await expect(addQuoteCommentAction(formData)).resolves.toBeUndefined();
+    expect(insert).toHaveBeenCalledWith({
+      author_id: "admin-1",
+      author_role: "admin",
+      comment_html: "<p>Comment on converted postpaid quote</p>",
+      comment_json: null,
+      quote_id: "quote-converted-001",
+    });
+  });
+
+  it("allows admin to edit a worker's comment on a quote (admin override is permitted)", async () => {
+    mockRequireRole.mockResolvedValue({ id: "admin-1", role: "admin" });
+    const { client, update } = createMockSupabaseForQuoteComments("signed", { authorId: "worker-1", authorRole: "worker" });
+    mockCreateClient.mockResolvedValue(client);
+
+    const { updateQuoteCommentAction } = await import("@/app/actions/quotes");
+    const formData = new FormData();
+    formData.set("quoteId", "quote-1");
+    formData.set("commentId", "comment-1");
+    formData.set("commentHtml", "<p>Admin editing worker comment</p>");
+
+    await expect(updateQuoteCommentAction(formData)).resolves.toBeUndefined();
+    expect(update).toHaveBeenCalled();
+  });
+
+  describe("page wiring: discussion compose is not gated on quote.status === draft", () => {
+    it("customer quote detail page passes canCompose={true} to QuoteDiscussionPanel", () => {
+      const pageContent = readFileSync(
+        join(process.cwd(), "src/app/customer/quotes/[quoteId]/page.tsx"),
+        "utf8",
+      );
+      expect(pageContent).not.toMatch(/canCompose\s*=\s*[^=]*quote\.status\s*===\s*["']draft["']/);
+      const discussionPanelMatch = pageContent.match(/QuoteDiscussionPanel[\s\S]*?canCompose\s*=\s*(\{[^}]+\}|true)/);
+      expect(discussionPanelMatch?.[0]).toMatch(/canCompose\s*=\s*\{?true\}?/);
+    });
+
+    it("admin quote detail page passes canCompose={true} to QuoteDiscussionPanel", () => {
+      const pageContent = readFileSync(
+        join(process.cwd(), "src/app/admin/quotes/[quoteId]/page.tsx"),
+        "utf8",
+      );
+      expect(pageContent).not.toMatch(/canCompose\s*=\s*[^=]*quote\.status\s*===\s*["']draft["']/);
+      const discussionPanelMatch = pageContent.match(/QuoteDiscussionPanel[\s\S]*?canCompose\s*=\s*(\{[^}]+\}|true)/);
+      expect(discussionPanelMatch?.[0]).toMatch(/canCompose\s*=\s*\{?true\}?/);
+    });
+
+    it("worker quote detail page discussion does not use canMutate for canCompose", () => {
+      const pageContent = readFileSync(
+        join(process.cwd(), "src/app/worker/quotes/[quoteId]/page.tsx"),
+        "utf8",
+      );
+      const workerDiscussionSection = pageContent.match(/QuoteDiscussionPanel[\s\S]*?(?=QuoteActionModal|<\/section>)/)?.[0];
+      expect(workerDiscussionSection).toBeDefined();
+      expect(workerDiscussionSection).not.toMatch(/canCompose\s*=\s*[^=]*canMutate/);
+      expect(workerDiscussionSection).toMatch(/canCompose\s*=\s*\{?true\}?/);
+    });
+
+    it("worker quote detail page still uses canMutate for non-discussion controls", () => {
+      const pageContent = readFileSync(
+        join(process.cwd(), "src/app/worker/quotes/[quoteId]/page.tsx"),
+        "utf8",
+      );
+      const headerActionPattern = /QuotesHeader[\s\S]*?action[\s\S]*?canMutate/;
+      expect(pageContent).toMatch(headerActionPattern);
+      expect(pageContent).toMatch(/activeSubtaskQuote\s*=\s*canMutate/);
+      expect(pageContent).toMatch(/activeEntryQuote\s*=\s*canMutate/);
+    });
   });
 
   it("requires current project access in the project discussion update and delete policies", () => {
