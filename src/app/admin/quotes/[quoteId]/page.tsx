@@ -277,7 +277,7 @@ export default async function AdminQuoteViewPage({
           comments={comments}
           currentUserId={profile.id}
           currentUserRole="admin"
-          canCompose={quote.status === "draft"}
+          canCompose={true}
           loadAction={loadQuoteDiscussionAction}
           addAction={addQuoteCommentAction}
           updateAction={updateQuoteCommentAction}
@@ -298,7 +298,7 @@ export default async function AdminQuoteViewPage({
             originalContentHint: t(locale, "Original content stays available so sign-off context is easy to audit after edits.", "Il contenuto originale resta disponibile così il contesto della firma è facile da verificare dopo le modifiche."),
             liveUpdatesLabel: t(locale, "Refresh now", "Aggiorna ora"),
             refreshingLabel: t(locale, "Refreshing…", "Aggiornamento…"),
-            readOnlyLabel: t(locale, "Discussion becomes read-only after the quote leaves draft.", "La discussione diventa in sola lettura quando il preventivo non è più in bozza."),
+            readOnlyLabel: t(locale, "Discussion is currently not available for new messages.", "La discussione non è attualmente disponibile per nuovi messaggi."),
             errorFallbackMessage: t(locale, "Unable to update discussion right now.", "Impossibile aggiornare la discussione in questo momento."),
             roleLabels: {
               admin: t(locale, "Admin", "Admin"),

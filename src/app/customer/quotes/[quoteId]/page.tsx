@@ -76,7 +76,7 @@ export default async function CustomerQuoteViewPage({
             comments={comments}
             currentUserId={profile.id}
             currentUserRole="customer"
-            canCompose={quote.status === "draft"}
+            canCompose={true}
             loadAction={loadQuoteDiscussionAction}
             addAction={addQuoteCommentAction}
             updateAction={updateQuoteCommentAction}
@@ -97,7 +97,7 @@ export default async function CustomerQuoteViewPage({
               originalContentHint: t(locale, "Use this reference when you need to compare the first version with the latest edit.", "Usa questo riferimento quando devi confrontare la prima versione con l'ultima modifica."),
               liveUpdatesLabel: t(locale, "Refresh now", "Aggiorna ora"),
               refreshingLabel: t(locale, "Refreshing…", "Aggiornamento…"),
-              readOnlyLabel: t(locale, "Discussion is read-only once the quote leaves draft.", "La discussione è in sola lettura quando il preventivo non è più in bozza."),
+              readOnlyLabel: t(locale, "Discussion is currently not available for new messages.", "La discussione non è attualmente disponibile per nuovi messaggi."),
               errorFallbackMessage: t(locale, "Unable to update discussion right now.", "Impossibile aggiornare la discussione in questo momento."),
               roleLabels: {
                 admin: t(locale, "Admin", "Admin"),

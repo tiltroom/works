@@ -681,24 +681,11 @@ export async function addQuoteCommentAction(formData: FormData) {
   assertDiscussionPayload(payload, locale, { en: "Comment", it: "del commento" });
 
   if (profile.role === "customer") {
-    const existing = await getQuoteForCustomer(quoteId, profile.id);
-    if (existing.status !== "draft") {
-      throw new Error(t(locale, "Comments can only be added while the quote is in draft", "I commenti possono essere aggiunti solo mentre il preventivo è in bozza"));
-    }
-  }
-
-  if (profile.role === "worker") {
-    const access = await assertWorkerAccessToQuote(quoteId, profile.id);
-    if (access.quote.status !== "draft") {
-      throw new Error(t(locale, "Comments can only be added while the quote is in draft", "I commenti possono essere aggiunti solo mentre il preventivo è in bozza"));
-    }
-  }
-
-  if (profile.role === "admin") {
-    const existing = await getQuoteForAdmin(quoteId);
-    if (existing.status !== "draft") {
-      throw new Error(t(locale, "Comments can only be added while the quote is in draft", "I commenti possono essere aggiunti solo mentre il preventivo è in bozza"));
-    }
+    await getQuoteForCustomer(quoteId, profile.id);
+  } else if (profile.role === "worker") {
+    await assertWorkerAccessToQuote(quoteId, profile.id);
+  } else {
+    await getQuoteForAdmin(quoteId);
   }
 
   const supabase = await assertQuotesBackend();
@@ -758,20 +745,11 @@ export async function updateQuoteCommentAction(formData: FormData) {
   assertDiscussionPayload(payload, locale, { en: "Comment", it: "del commento" });
 
   if (profile.role === "customer") {
-    const existing = await getQuoteForCustomer(quoteId, profile.id);
-    if (existing.status !== "draft") {
-      throw new Error(t(locale, "Comments can only be edited while the quote is in draft", "I commenti possono essere modificati solo mentre il preventivo è in bozza"));
-    }
+    await getQuoteForCustomer(quoteId, profile.id);
   } else if (profile.role === "worker") {
-    const access = await assertWorkerAccessToQuote(quoteId, profile.id);
-    if (access.quote.status !== "draft") {
-      throw new Error(t(locale, "Comments can only be edited while the quote is in draft", "I commenti possono essere modificati solo mentre il preventivo è in bozza"));
-    }
+    await assertWorkerAccessToQuote(quoteId, profile.id);
   } else {
-    const existing = await getQuoteForAdmin(quoteId);
-    if (existing.status !== "draft") {
-      throw new Error(t(locale, "Comments can only be edited while the quote is in draft", "I commenti possono essere modificati solo mentre il preventivo è in bozza"));
-    }
+    await getQuoteForAdmin(quoteId);
   }
 
   const existingComment = await getQuoteCommentForMutation(quoteId, commentId);
