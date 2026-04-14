@@ -4,15 +4,16 @@ import {
   addQuoteCommentAction,
   addQuoteSubtaskAction,
   addQuoteSubtaskEntryAction,
+  loadQuoteDiscussionAction,
   loadQuotesPageData,
+  updateQuoteCommentAction,
 } from "@/app/actions/quotes";
 import { LogoutButton } from "@/components/logout-button";
 import {
   QuoteActionModal,
-  QuotesCommentsList,
+  QuoteDiscussionPanel,
   QuotesHeader,
   QuotesRichTextContent,
-  QuotesRichTextEditor,
   QuotesSectionCard,
   QuotesSubtaskCard,
   QuotesSubtaskForm,
@@ -43,7 +44,7 @@ export default async function WorkerQuoteViewPage({
   searchParams,
 }: {
   params: Promise<{ quoteId: string }> | { quoteId: string };
-  searchParams?: Promise<{ commentQuoteId?: string; subtaskQuoteId?: string; entryQuoteId?: string; toast?: string; toastMessage?: string }> | { commentQuoteId?: string; subtaskQuoteId?: string; entryQuoteId?: string; toast?: string; toastMessage?: string };
+  searchParams?: Promise<{ subtaskQuoteId?: string; entryQuoteId?: string; toast?: string; toastMessage?: string }> | { subtaskQuoteId?: string; entryQuoteId?: string; toast?: string; toastMessage?: string };
 }) {
   const locale = await getLocale();
   const tag = localeTag(locale);
@@ -52,7 +53,6 @@ export default async function WorkerQuoteViewPage({
   const quoteId = routeParams.quoteId?.trim();
   const detailHref = `/worker/quotes/${quoteId}`;
   const paramsValue = await Promise.resolve(searchParams ?? {});
-  const commentQuoteId = paramsValue.commentQuoteId?.trim();
   const subtaskQuoteId = paramsValue.subtaskQuoteId?.trim();
   const entryQuoteId = paramsValue.entryQuoteId?.trim();
   const toastTypeParam = paramsValue.toast?.trim();
@@ -74,7 +74,6 @@ export default async function WorkerQuoteViewPage({
   const entries = quotesData.subtaskEntries.filter((entry) => subtaskIds.has(entry.quoteSubtaskId));
   const comments = quotesData.comments.filter((comment) => comment.quoteId === quote.id);
   const canMutate = quote.status === "draft";
-  const activeCommentQuote = canMutate && commentQuoteId === quote.id ? quote : null;
   const activeSubtaskQuote = canMutate && subtaskQuoteId === quote.id ? quote : null;
   const activeEntryQuote = canMutate && entryQuoteId === quote.id ? quote : null;
 
@@ -112,7 +111,6 @@ export default async function WorkerQuoteViewPage({
           description={quote.description || t(locale, "No summary provided yet.", "Nessuna sintesi fornita.")}
           action={canMutate ? (
             <div className="flex flex-wrap gap-2">
-              <Link href={`${detailHref}?commentQuoteId=${quote.id}`} className={quotesSecondaryButtonClass}>{t(locale, "Comment", "Commenta")}</Link>
               <Link href={`${detailHref}?subtaskQuoteId=${quote.id}`} className={quotesSecondaryButtonClass}>{t(locale, "Add subtask", "Aggiungi sottoattività")}</Link>
               <Link href={`${detailHref}?entryQuoteId=${quote.id}`} className={quotesSecondaryButtonClass}>{t(locale, "Log hours", "Registra ore")}</Link>
             </div>
@@ -178,43 +176,45 @@ export default async function WorkerQuoteViewPage({
           />
         </div>
 
-        <QuotesCommentsList
+        <QuoteDiscussionPanel
           title={t(locale, "Discussion", "Discussione")}
           description={t(locale, "Keep blockers, assumptions, and implementation notes visible to the whole quotes workflow.", "Mantieni visibili blocchi, assunzioni e note implementative lungo tutto il flusso dei preventivi.")}
-          comments={comments.map((comment) => ({
-            id: comment.id,
-            authorName: comment.authorName || t(locale, comment.authorRole === "admin" ? "Admin" : comment.authorRole === "customer" ? "Customer" : "Worker", comment.authorRole === "admin" ? "Admin" : comment.authorRole === "customer" ? "Cliente" : "Operatore"),
-            createdAtLabel: formatDateTime(tag, comment.createdAt),
-            metaLabel: comment.authorRole,
-            body: <QuotesRichTextContent html={comment.commentHtml ?? ""} emptyMessage={t(locale, "No comment content", "Nessun contenuto commento")} />,
-          }))}
-          emptyMessage={t(locale, "No comments yet.", "Nessun commento ancora.")}
+          quoteId={quote.id}
+          tag={tag}
+          comments={comments}
+          currentUserId={profile.id}
+          currentUserRole="worker"
+          canCompose={canMutate}
+          loadAction={loadQuoteDiscussionAction}
+          addAction={addQuoteCommentAction}
+          updateAction={updateQuoteCommentAction}
+          labels={{
+            emptyMessage: t(locale, "No comments yet.", "Nessun commento ancora."),
+            noCommentContent: t(locale, "No comment content", "Nessun contenuto commento"),
+            composerLabel: t(locale, "New message", "Nuovo messaggio"),
+            composerPlaceholder: t(locale, "Describe blockers, implementation assumptions, or client-facing notes.", "Descrivi blocchi, assunzioni implementative o note per il cliente."),
+            composerHelpText: t(locale, "Messages refresh automatically while you keep the quote open.", "I messaggi si aggiornano automaticamente mentre tieni aperto il preventivo."),
+            sendLabel: t(locale, "Send message", "Invia messaggio"),
+            sendingLabel: t(locale, "Sending…", "Invio in corso…"),
+            editLabel: t(locale, "Edit", "Modifica"),
+            cancelEditLabel: t(locale, "Cancel", "Annulla"),
+            saveEditLabel: t(locale, "Save changes", "Salva modifiche"),
+            savingEditLabel: t(locale, "Saving…", "Salvataggio in corso…"),
+            editedLabel: t(locale, "Edited", "Modificato"),
+            originalContentLabel: t(locale, "View original message", "Visualizza messaggio originale"),
+            originalContentHint: t(locale, "Original content stays available so later readers can understand what changed.", "Il contenuto originale resta disponibile così chi legge dopo può capire cosa è cambiato."),
+            liveUpdatesLabel: t(locale, "Refresh now", "Aggiorna ora"),
+            refreshingLabel: t(locale, "Refreshing…", "Aggiornamento…"),
+            readOnlyLabel: t(locale, "Discussion is read-only once the quote leaves draft.", "La discussione è in sola lettura quando il preventivo non è più in bozza."),
+            errorFallbackMessage: t(locale, "Unable to update discussion right now.", "Impossibile aggiornare la discussione in questo momento."),
+            roleLabels: {
+              admin: t(locale, "Admin", "Admin"),
+              customer: t(locale, "Customer", "Cliente"),
+              worker: t(locale, "Worker", "Operatore"),
+            },
+          }}
         />
       </section>
-
-      {activeCommentQuote ? (
-        <QuoteActionModal
-          title={t(locale, "Add comment", "Aggiungi commento")}
-          closeHref={detailHref}
-          successRedirectHref={detailHref}
-          action={addQuoteCommentAction}
-          closeLabel={t(locale, "Close", "Chiudi")}
-          cancelLabel={t(locale, "Cancel", "Annulla")}
-          submitLabel={t(locale, "Save comment", "Salva commento")}
-          submittingLabel={t(locale, "Saving…", "Salvataggio in corso…")}
-          successMessage={t(locale, "Comment saved", "Commento salvato")}
-          genericErrorMessage={t(locale, "Unable to save comment", "Impossibile salvare il commento")}
-        >
-          <input type="hidden" name="quoteId" value={activeCommentQuote.id} />
-          <QuotesRichTextEditor
-            name="commentHtml"
-            jsonName="commentJson"
-            label={t(locale, "Comment", "Commento")}
-            placeholder={t(locale, "Describe blockers, implementation assumptions, or client-facing notes.", "Descrivi blocchi, assunzioni implementative o note per il cliente.")}
-            imageButtonLabel={t(locale, "Insert image", "Inserisci immagine")}
-          />
-        </QuoteActionModal>
-      ) : null}
 
       {activeSubtaskQuote ? (
         <QuoteActionModal

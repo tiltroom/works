@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import {
-  QuotesCommentsList,
   QuotesHeader,
   QuotesRichTextContent,
   QuotesSectionCard,
@@ -37,6 +36,7 @@ interface CustomerQuoteDetailProps {
   comments: QuoteCommentRecord[];
   latestPrepayment: QuotePrepaymentSessionRecord | null;
   actions?: ReactNode;
+  discussion?: ReactNode;
 }
 
 export function CustomerQuoteDetail({
@@ -46,9 +46,9 @@ export function CustomerQuoteDetail({
   assignedWorkers,
   subtasks,
   entries,
-  comments,
   latestPrepayment,
   actions,
+  discussion,
 }: CustomerQuoteDetailProps) {
   return (
     <div className="space-y-4">
@@ -120,18 +120,7 @@ export function CustomerQuoteDetail({
       ) : null}
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <QuotesCommentsList
-          title={t(locale, "Discussion", "Discussione")}
-          description={t(locale, "Shared customer, worker, and admin notes for this quote.", "Note condivise di cliente, operatori e amministratore per questo preventivo.")}
-          comments={comments.map((comment) => ({
-            id: comment.id,
-            authorName: comment.authorName || t(locale, comment.authorRole === "customer" ? "Customer" : comment.authorRole === "admin" ? "Admin" : "Worker", comment.authorRole === "customer" ? "Cliente" : comment.authorRole === "admin" ? "Admin" : "Operatore"),
-            createdAtLabel: formatDateTime(tag, comment.createdAt),
-            metaLabel: comment.authorRole,
-            body: <QuotesRichTextContent html={comment.commentHtml ?? ""} emptyMessage={t(locale, "No comment content", "Nessun contenuto commento")} />,
-          }))}
-          emptyMessage={t(locale, "No comments yet.", "Nessun commento ancora.")}
-        />
+        {discussion}
 
         <QuotesSectionCard title={t(locale, "Conversion & prepayment", "Conversione e prepagamento")}>
           <div className="space-y-3 text-sm text-muted-foreground">

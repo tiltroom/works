@@ -339,7 +339,11 @@ export default async function AdminPage({
                       ) : (
                         (projects ?? []).slice(0, 5).map((project) => (
                           <tr key={project.id} className={tableRowClass}>
-                            <td className="px-4 py-3 font-medium text-foreground">{project.name}</td>
+                            <td className="px-4 py-3 font-medium text-foreground">
+                              <Link href={`/admin/projects/${project.id}`} className="transition-colors hover:text-brand-600 dark:hover:text-brand-300">
+                                {project.name}
+                              </Link>
+                            </td>
                             <td className="px-4 py-3 text-muted-foreground">{(project.profiles as { full_name?: string } | null)?.full_name || t(locale, "Unknown", "Sconosciuto")}</td>
                             <td className="px-4 py-3 text-right text-foreground/85">{Number(project.assigned_hours).toFixed(2)}</td>
                           </tr>
@@ -484,7 +488,11 @@ export default async function AdminPage({
                      ) : (
                        (projects ?? []).map((project) => (
                         <tr key={project.id} className={tableRowClass}>
-                          <td className="px-4 py-3 font-medium text-foreground">{project.name}</td>
+                           <td className="px-4 py-3 font-medium text-foreground">
+                             <Link href={`/admin/projects/${project.id}`} className="transition-colors hover:text-brand-600 dark:hover:text-brand-300">
+                               {project.name}
+                             </Link>
+                           </td>
                           <td className="px-4 py-3 text-muted-foreground">{(project.profiles as { full_name?: string } | null)?.full_name || t(locale, "Unknown", "Sconosciuto")}</td>
                           <td className="px-4 py-3 text-muted-foreground">{formatAssignedWorkerNames(project.project_workers as ProjectWorkerAssignment[] | null, workersById)}</td>
                           <td className="px-4 py-3 text-right">
@@ -507,7 +515,19 @@ export default async function AdminPage({
                             })()}
                           </td>
                           <td className="px-4 py-3">
-                            <div className="flex items-center justify-end gap-2">
+                             <div className="flex items-center justify-end gap-2">
+                              <Link
+                                href={`/admin/projects/${project.id}`}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 transition-colors hover:bg-emerald-500/20 dark:text-emerald-300"
+                                aria-label={t(locale, "Open project detail", "Apri dettaglio progetto")}
+                                title={t(locale, "Open project detail", "Apri dettaglio progetto")}
+                              >
+                                <ActionIcon>
+                                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" className="h-4 w-4">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12H9m0 0l3-3m-3 3l3 3m9-3A9 9 0 113 12a9 9 0 0118 0z" />
+                                  </svg>
+                                </ActionIcon>
+                              </Link>
                               <Link
                                 href={`/admin?tab=projects&viewTransactionsId=${project.id}`}
                                 className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-blue-500/30 bg-blue-500/10 text-blue-700 transition-colors hover:bg-blue-500/20 dark:text-blue-300"

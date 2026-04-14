@@ -75,7 +75,29 @@ export interface QuoteCommentRecord {
   authorName: string | null;
   commentHtml: string | null;
   commentJson: JSONContent | null;
+  originalCommentHtml: string | null;
+  originalCommentJson: JSONContent | null;
   createdAt: string;
+  updatedAt: string;
+  editedAt: string | null;
+  workerId: string | null;
+  workerName: string | null;
+  body: string;
+}
+
+export interface ProjectDiscussionMessageRecord {
+  id: string;
+  projectId: string;
+  authorId: string | null;
+  authorRole: "admin" | "customer" | "worker";
+  authorName: string | null;
+  messageHtml: string | null;
+  messageJson: JSONContent | null;
+  originalMessageHtml: string | null;
+  originalMessageJson: JSONContent | null;
+  createdAt: string;
+  updatedAt: string;
+  editedAt: string | null;
   workerId: string | null;
   workerName: string | null;
   body: string;
@@ -156,6 +178,37 @@ function asJsonContent(value: unknown): JSONContent | null {
   }
 
   return value as JSONContent;
+}
+
+export function sanitizeRichTextHtml(html: string | null | undefined) {
+  if (!html) {
+    return null;
+  }
+
+  const withoutScriptBlocks = html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
+    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, "")
+    .replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, "")
+    .replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, "")
+    .replace(/<link\b[^>]*>/gi, "")
+    .replace(/<meta\b[^>]*>/gi, "");
+
+  const withoutEventHandlers = withoutScriptBlocks
+    .replace(/\s+on[a-z]+\s*=\s*"[^"]*"/gi, "")
+    .replace(/\s+on[a-z]+\s*=\s*'[^']*'/gi, "")
+    .replace(/\s+on[a-z]+\s*=\s*[^\s>]+/gi, "");
+
+  const withoutJavascriptUrls = withoutEventHandlers
+    .replace(/\s+href\s*=\s*"\s*javascript:[^"]*"/gi, "")
+    .replace(/\s+href\s*=\s*'\s*javascript:[^']*'/gi, "")
+    .replace(/\s+src\s*=\s*"\s*javascript:[^"]*"/gi, "")
+    .replace(/\s+src\s*=\s*'\s*javascript:[^']*'/gi, "")
+    .replace(/\s+srcdoc\s*=\s*"[^"]*"/gi, "")
+    .replace(/\s+srcdoc\s*=\s*'[^']*'/gi, "");
+
+  const sanitized = withoutJavascriptUrls.trim();
+  return sanitized.length > 0 ? sanitized : null;
 }
 
 export function parseQuoteRecord(row: RawRecord): QuoteRecord {
@@ -244,10 +297,38 @@ export function parseQuoteCommentRecord(row: RawRecord): QuoteCommentRecord {
     authorName: asNullableString(row.author_name),
     commentHtml,
     commentJson: asJsonContent(row.comment_json),
+    originalCommentHtml: asNullableString(row.original_comment_html),
+    originalCommentJson: asJsonContent(row.original_comment_json),
     createdAt: asString(row.created_at),
+    updatedAt: asString(row.updated_at, asString(row.created_at)),
+    editedAt: asNullableString(row.edited_at),
     workerId: authorRole === "worker" ? authorId : null,
     workerName: authorRole === "worker" ? asNullableString(row.author_name) : null,
     body: commentHtml ?? "",
+  };
+}
+
+export function parseProjectDiscussionMessageRecord(row: RawRecord): ProjectDiscussionMessageRecord {
+  const authorRole = asRole(row.author_role);
+  const authorId = asNullableString(row.author_id);
+  const messageHtml = asNullableString(row.message_html);
+
+  return {
+    id: asString(row.id),
+    projectId: asString(row.project_id),
+    authorId,
+    authorRole,
+    authorName: asNullableString(row.author_name),
+    messageHtml,
+    messageJson: asJsonContent(row.message_json),
+    originalMessageHtml: asNullableString(row.original_message_html),
+    originalMessageJson: asJsonContent(row.original_message_json),
+    createdAt: asString(row.created_at),
+    updatedAt: asString(row.updated_at, asString(row.created_at)),
+    editedAt: asNullableString(row.edited_at),
+    workerId: authorRole === "worker" ? authorId : null,
+    workerName: authorRole === "worker" ? asNullableString(row.author_name) : null,
+    body: messageHtml ?? "",
   };
 }
 

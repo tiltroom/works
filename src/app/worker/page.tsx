@@ -275,6 +275,30 @@ export default async function WorkerPage({
           )}
 
           <section className={`${panelClass} p-6`}>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="text-xl font-semibold text-foreground">{t(locale, "Assigned projects", "Progetti assegnati")}</h2>
+              <span className="text-xs text-muted-foreground">{assignedProjects.length} {t(locale, assignedProjects.length === 1 ? "project" : "projects", assignedProjects.length === 1 ? "progetto" : "progetti")}</span>
+            </div>
+            <div className="space-y-3">
+              {assignedProjects.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{t(locale, "No assigned projects yet.", "Nessun progetto assegnato ancora.")}</p>
+              ) : (
+                assignedProjects.map((row) => (
+                  <div key={row.project_id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-background/60 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">{row.projects?.name || row.project_id}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{t(locale, "Open the dedicated detail view and live project discussion.", "Apri la vista di dettaglio dedicata e la discussione live del progetto.")}</p>
+                    </div>
+                    <Link href={`/worker/projects/${row.project_id}`} className="rounded-lg border border-border bg-background/70 px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
+                      {t(locale, "Open detail", "Apri dettaglio")}
+                    </Link>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+
+          <section className={`${panelClass} p-6`}>
             <div className="flex items-center justify-between mb-6">
               <h2 className="flex items-center gap-2 text-xl font-semibold text-foreground">
                 <svg className="w-5 h-5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -6,6 +6,206 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth";
 import { t } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n-server";
+import {
+  parseProjectDiscussionMessageRecord,
+  sanitizeRichTextHtml,
+  type ProjectDiscussionMessageRecord,
+} from "@/lib/quotes";
+
+type RawRow = Record<string, unknown>;
+
+interface DiscussionPayload {
+  html: string | null;
+  json: Record<string, unknown> | null;
+}
+
+function trimString(formData: FormData, key: string) {
+  return String(formData.get(key) ?? "").trim();
+}
+
+function parseJsonContent(value: string) {
+  if (!value.trim()) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(value) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function parseDiscussionPayload(
+  formData: FormData,
+  options: {
+    htmlKeys: string[];
+    jsonKeys: string[];
+  },
+): DiscussionPayload {
+  const rawHtml = options.htmlKeys
+    .map((key) => String(formData.get(key) ?? "").trim())
+    .find((value) => value.length > 0) ?? null;
+  const jsonValue = options.jsonKeys
+    .map((key) => parseJsonContent(String(formData.get(key) ?? "")))
+    .find((value) => value !== null) ?? null;
+
+  return { html: sanitizeRichTextHtml(rawHtml), json: jsonValue };
+}
+
+function assertDiscussionPayload(payload: DiscussionPayload, locale: "en" | "it") {
+  if (!payload.html && !payload.json) {
+    throw new Error(t(locale, "Message content is required", "Il contenuto del messaggio è obbligatorio"));
+  }
+}
+
+function revalidateProjectsModule(projectId?: string) {
+  revalidatePath("/admin");
+  revalidatePath("/customer");
+  revalidatePath("/worker");
+
+  if (projectId) {
+    revalidatePath(`/admin/projects/${projectId}`);
+    revalidatePath(`/customer/projects/${projectId}`);
+    revalidatePath(`/worker/projects/${projectId}`);
+  }
+}
+
+async function getProjectForAdmin(projectId: string) {
+  const locale = await getLocale();
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("projects")
+    .select("id,customer_id")
+    .eq("id", projectId)
+    .maybeSingle<{ id: string; customer_id: string }>();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data) {
+    throw new Error(t(locale, "Project not found", "Progetto non trovato"));
+  }
+
+  return data;
+}
+
+async function getProjectForCustomer(projectId: string, customerId: string) {
+  const locale = await getLocale();
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("projects")
+    .select("id,customer_id")
+    .eq("id", projectId)
+    .eq("customer_id", customerId)
+    .maybeSingle<{ id: string; customer_id: string }>();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data) {
+    throw new Error(t(locale, "Project not found", "Progetto non trovato"));
+  }
+
+  return data;
+}
+
+async function assertWorkerAccessToProject(projectId: string, workerId: string) {
+  const locale = await getLocale();
+  const supabase = await createClient();
+  const [projectResult, assignmentResult] = await Promise.all([
+    supabase.from("projects").select("id,customer_id").eq("id", projectId).maybeSingle<{ id: string; customer_id: string }>(),
+    supabase
+      .from("project_workers")
+      .select("project_id")
+      .eq("project_id", projectId)
+      .eq("worker_id", workerId)
+      .maybeSingle<{ project_id: string }>(),
+  ]);
+
+  if (projectResult.error) {
+    throw new Error(projectResult.error.message);
+  }
+
+  if (!projectResult.data) {
+    throw new Error(t(locale, "Project not found", "Progetto non trovato"));
+  }
+
+  if (assignmentResult.error) {
+    throw new Error(assignmentResult.error.message);
+  }
+
+  if (!assignmentResult.data) {
+    throw new Error(t(locale, "Not authorized for this project", "Non autorizzato per questo progetto"));
+  }
+
+  return projectResult.data;
+}
+
+async function assertProjectDiscussionAccess(role: "admin" | "customer" | "worker", profileId: string, projectId: string) {
+  if (role === "admin") {
+    return getProjectForAdmin(projectId);
+  }
+
+  if (role === "customer") {
+    return getProjectForCustomer(projectId, profileId);
+  }
+
+  return assertWorkerAccessToProject(projectId, profileId);
+}
+
+async function getProjectDiscussionMessageForMutation(projectId: string, messageId: string) {
+  const locale = await getLocale();
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("project_discussion_messages")
+    .select("*")
+    .eq("id", messageId)
+    .eq("project_id", projectId)
+    .maybeSingle<RawRow>();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data) {
+    throw new Error(t(locale, "Discussion message not found", "Messaggio della discussione non trovato"));
+  }
+
+  return parseProjectDiscussionMessageRecord(data);
+}
+
+async function loadProjectDiscussionMessages(projectId: string): Promise<ProjectDiscussionMessageRecord[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("project_discussion_messages")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const messages = (data ?? []).map((row) => parseProjectDiscussionMessageRecord(row as RawRow));
+  const profileIds = [...new Set(messages.map((message) => message.authorId).filter((value): value is string => Boolean(value)))];
+  const profilesResult = profileIds.length > 0
+    ? await supabase.from("profiles").select("id,full_name").in("id", profileIds)
+    : { data: [], error: null };
+
+  if (profilesResult.error) {
+    throw new Error(profilesResult.error.message);
+  }
+
+  const profileNameById = new Map((profilesResult.data ?? []).map((profile) => [String(profile.id), profile.full_name?.trim() || null]));
+
+  return messages.map((message) => ({
+    ...message,
+    authorName: message.authorName ?? (message.authorId ? profileNameById.get(message.authorId) ?? null : null),
+    workerName: message.authorRole === "worker" && message.authorId ? profileNameById.get(message.authorId) ?? null : message.workerName,
+  }));
+}
 
 export async function createProjectAction(formData: FormData) {
   const locale = await getLocale();
@@ -55,7 +255,7 @@ export async function createProjectAction(formData: FormData) {
     }
   }
 
-  revalidatePath("/admin");
+  revalidateProjectsModule(projectId);
 }
 
 export async function assignWorkerAction(formData: FormData) {
@@ -78,7 +278,7 @@ export async function assignWorkerAction(formData: FormData) {
     throw new Error(error.message);
   }
 
-  revalidatePath("/admin");
+  revalidateProjectsModule(projectId);
 }
 
 export async function updateProjectAction(formData: FormData) {
@@ -132,7 +332,7 @@ export async function updateProjectAction(formData: FormData) {
     }
   }
 
-  revalidatePath("/admin");
+  revalidateProjectsModule(projectId);
 }
 
 export async function deleteProjectAction(formData: FormData) {
@@ -152,7 +352,7 @@ export async function deleteProjectAction(formData: FormData) {
     throw new Error(error.message);
   }
 
-  revalidatePath("/admin");
+  revalidateProjectsModule(projectId);
 }
 
 export async function adjustProjectHoursAction(formData: FormData) {
@@ -206,6 +406,90 @@ export async function adjustProjectHoursAction(formData: FormData) {
     throw new Error(adjustmentError.message);
   }
 
-  revalidatePath("/admin");
-  revalidatePath("/customer");
+  revalidateProjectsModule(projectId);
+}
+
+export async function loadProjectDiscussionAction(formData: FormData): Promise<ProjectDiscussionMessageRecord[]> {
+  const locale = await getLocale();
+  const profile = await requireRole(["admin", "customer", "worker"]);
+  const projectId = trimString(formData, "projectId");
+
+  if (!projectId) {
+    throw new Error(t(locale, "Project not found", "Progetto non trovato"));
+  }
+
+  await assertProjectDiscussionAccess(profile.role, profile.id, projectId);
+
+  return loadProjectDiscussionMessages(projectId);
+}
+
+export async function addProjectDiscussionMessageAction(formData: FormData) {
+  const locale = await getLocale();
+  const profile = await requireRole(["admin", "customer", "worker"]);
+  const projectId = trimString(formData, "projectId");
+  const payload = parseDiscussionPayload(formData, {
+    htmlKeys: ["messageHtml", "message", "commentHtml", "comment"],
+    jsonKeys: ["messageJson", "commentJson"],
+  });
+
+  if (!projectId) {
+    throw new Error(t(locale, "Invalid discussion payload", "Payload discussione non valido"));
+  }
+
+  assertDiscussionPayload(payload, locale);
+  await assertProjectDiscussionAccess(profile.role, profile.id, projectId);
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("project_discussion_messages").insert({
+    project_id: projectId,
+    author_id: profile.id,
+    author_role: profile.role,
+    message_html: payload.html,
+    message_json: payload.json,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  revalidateProjectsModule(projectId);
+}
+
+export async function updateProjectDiscussionMessageAction(formData: FormData) {
+  const locale = await getLocale();
+  const profile = await requireRole(["admin", "customer", "worker"]);
+  const projectId = trimString(formData, "projectId");
+  const messageId = trimString(formData, "messageId");
+  const payload = parseDiscussionPayload(formData, {
+    htmlKeys: ["messageHtml", "message", "commentHtml", "comment"],
+    jsonKeys: ["messageJson", "commentJson"],
+  });
+
+  if (!projectId || !messageId) {
+    throw new Error(t(locale, "Invalid discussion payload", "Payload discussione non valido"));
+  }
+
+  assertDiscussionPayload(payload, locale);
+  await assertProjectDiscussionAccess(profile.role, profile.id, projectId);
+
+  const existingMessage = await getProjectDiscussionMessageForMutation(projectId, messageId);
+  if (profile.role !== "admin" && existingMessage.authorId !== profile.id) {
+    throw new Error(t(locale, "You can only edit your own discussion messages", "Puoi modificare solo i tuoi messaggi di discussione"));
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("project_discussion_messages")
+    .update({
+      message_html: payload.html,
+      message_json: payload.json,
+    })
+    .eq("id", messageId)
+    .eq("project_id", projectId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  revalidateProjectsModule(projectId);
 }

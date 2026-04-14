@@ -16,6 +16,7 @@ import {
   parseQuoteSubtaskRecord,
   parseQuoteSubtaskEstimateRecord,
   parseQuoteWorkerRecord,
+  sanitizeRichTextHtml,
   type QuoteCommentRecord,
   type QuotePrepaymentSessionRecord,
   type QuoteRecord,
@@ -42,11 +43,18 @@ interface QuotesPageData {
 
 type RawRow = Record<string, unknown>;
 
+interface DiscussionPayload {
+  html: string | null;
+  json: Record<string, unknown> | null;
+}
+
 function revalidateQuotesModule(quoteId?: string) {
   revalidatePath("/admin");
   revalidatePath("/admin/quotes");
   if (quoteId) {
     revalidatePath(`/admin/quotes/${quoteId}`);
+    revalidatePath(`/customer/quotes/${quoteId}`);
+    revalidatePath(`/worker/quotes/${quoteId}`);
   }
   revalidatePath("/customer");
   revalidatePath("/customer/quotes");
@@ -56,6 +64,89 @@ function revalidateQuotesModule(quoteId?: string) {
 
 function trimString(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
+}
+
+function parseDiscussionPayload(
+  formData: FormData,
+  options: {
+    htmlKeys: string[];
+    jsonKeys: string[];
+  },
+): DiscussionPayload {
+  const rawHtml = options.htmlKeys
+    .map((key) => String(formData.get(key) ?? "").trim())
+    .find((value) => value.length > 0) ?? null;
+  const jsonValue = options.jsonKeys
+    .map((key) => parseJsonContent(String(formData.get(key) ?? "")))
+    .find((value) => value !== null) ?? null;
+
+  return { html: sanitizeRichTextHtml(rawHtml), json: jsonValue };
+}
+
+function assertDiscussionPayload(payload: DiscussionPayload, locale: "en" | "it", fieldLabel: { en: string; it: string }) {
+  if (!payload.html && !payload.json) {
+    throw new Error(t(locale, `${fieldLabel.en} content is required`, `Il contenuto ${fieldLabel.it} è obbligatorio`));
+  }
+}
+
+function normalizeQuoteCommentAuthorName(comment: QuoteCommentRecord, profileNameById: Map<string, string | null>) {
+  return comment.authorName ?? (comment.authorId ? profileNameById.get(comment.authorId) ?? null : null);
+}
+
+async function getQuoteCommentForMutation(quoteId: string, commentId: string) {
+  const locale = await getLocale();
+  const supabase = await assertQuotesBackend();
+  const { data, error } = await supabase
+    .from("quote_comments")
+    .select("*")
+    .eq("id", commentId)
+    .eq("quote_id", quoteId)
+    .maybeSingle<RawRow>();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data) {
+    throw new Error(t(locale, "Comment not found", "Commento non trovato"));
+  }
+
+  return parseQuoteCommentRecord(data);
+}
+
+async function loadQuoteDiscussionCommentsForQuote(quoteId: string) {
+  const supabase = await assertQuotesBackend();
+  const commentsResult = await supabase
+    .from("quote_comments")
+    .select("*")
+    .eq("quote_id", quoteId)
+    .order("created_at", { ascending: false });
+
+  if (commentsResult.error) {
+    if (isQuotesBackendMissingError(commentsResult.error)) {
+      return [];
+    }
+
+    throw new Error(commentsResult.error.message);
+  }
+
+  const comments = (commentsResult.data ?? []).map((row) => parseQuoteCommentRecord(row as RawRow));
+  const profileIds = [...new Set(comments.map((comment) => comment.authorId).filter((value): value is string => Boolean(value)))];
+  const profilesResult = profileIds.length > 0
+    ? await supabase.from("profiles").select("id,full_name").in("id", profileIds)
+    : { data: [], error: null };
+
+  if (profilesResult.error) {
+    throw new Error(profilesResult.error.message);
+  }
+
+  const profileNameById = new Map((profilesResult.data ?? []).map((profile) => [String(profile.id), profile.full_name?.trim() || null]));
+
+  return comments.map((comment) => ({
+    ...comment,
+    authorName: normalizeQuoteCommentAuthorName(comment, profileNameById),
+    workerName: comment.authorRole === "worker" && comment.authorId ? profileNameById.get(comment.authorId) ?? null : comment.workerName,
+  }));
 }
 
 function parseJsonContent(value: string) {
@@ -396,7 +487,7 @@ export async function loadQuotesPageData(role: AppRole, profileId: string): Prom
 
   const normalizedComments = comments.map((comment) => ({
     ...comment,
-    authorName: comment.authorName ?? (comment.authorId ? profileNameById.get(comment.authorId) ?? null : null),
+    authorName: normalizeQuoteCommentAuthorName(comment, profileNameById),
     workerName: comment.authorRole === "worker" && comment.authorId ? profileNameById.get(comment.authorId) ?? null : comment.workerName,
   }));
 
@@ -578,12 +669,16 @@ export async function addQuoteCommentAction(formData: FormData) {
   const locale = await getLocale();
   const profile = await requireRole(["customer", "worker", "admin"]);
   const quoteId = trimString(formData, "quoteId");
-  const commentHtml = String(formData.get("commentHtml") ?? formData.get("comment") ?? "").trim();
-  const commentJson = parseJsonContent(String(formData.get("commentJson") ?? ""));
+  const payload = parseDiscussionPayload(formData, {
+    htmlKeys: ["commentHtml", "comment"],
+    jsonKeys: ["commentJson"],
+  });
 
-  if (!quoteId || (!commentHtml && !commentJson)) {
+  if (!quoteId) {
     throw new Error(t(locale, "Comment content is required", "Il contenuto del commento è obbligatorio"));
   }
+
+  assertDiscussionPayload(payload, locale, { en: "Comment", it: "del commento" });
 
   if (profile.role === "customer") {
     const existing = await getQuoteForCustomer(quoteId, profile.id);
@@ -593,11 +688,17 @@ export async function addQuoteCommentAction(formData: FormData) {
   }
 
   if (profile.role === "worker") {
-    await assertWorkerAccessToQuote(quoteId, profile.id);
+    const access = await assertWorkerAccessToQuote(quoteId, profile.id);
+    if (access.quote.status !== "draft") {
+      throw new Error(t(locale, "Comments can only be added while the quote is in draft", "I commenti possono essere aggiunti solo mentre il preventivo è in bozza"));
+    }
   }
 
   if (profile.role === "admin") {
-    await getQuoteForAdmin(quoteId);
+    const existing = await getQuoteForAdmin(quoteId);
+    if (existing.status !== "draft") {
+      throw new Error(t(locale, "Comments can only be added while the quote is in draft", "I commenti possono essere aggiunti solo mentre il preventivo è in bozza"));
+    }
   }
 
   const supabase = await assertQuotesBackend();
@@ -605,8 +706,8 @@ export async function addQuoteCommentAction(formData: FormData) {
     quote_id: quoteId,
     author_id: profile.id,
     author_role: profile.role,
-    comment_html: commentHtml || null,
-    comment_json: commentJson,
+    comment_html: payload.html,
+    comment_json: payload.json,
   });
 
   if (error) {
@@ -618,6 +719,81 @@ export async function addQuoteCommentAction(formData: FormData) {
 
 export async function addQuoteWorkerCommentAction(formData: FormData) {
   return addQuoteCommentAction(formData);
+}
+
+export async function loadQuoteDiscussionAction(formData: FormData): Promise<QuoteCommentRecord[]> {
+  const profile = await requireRole(["customer", "worker", "admin"]);
+  const quoteId = trimString(formData, "quoteId");
+  const locale = await getLocale();
+
+  if (!quoteId) {
+    throw new Error(t(locale, "Quote not found", "Preventivo non trovato"));
+  }
+
+  if (profile.role === "customer") {
+    await getQuoteForCustomer(quoteId, profile.id);
+  } else if (profile.role === "worker") {
+    await assertWorkerAccessToQuote(quoteId, profile.id);
+  } else {
+    await getQuoteForAdmin(quoteId);
+  }
+
+  return loadQuoteDiscussionCommentsForQuote(quoteId);
+}
+
+export async function updateQuoteCommentAction(formData: FormData) {
+  const locale = await getLocale();
+  const profile = await requireRole(["customer", "worker", "admin"]);
+  const quoteId = trimString(formData, "quoteId");
+  const commentId = trimString(formData, "commentId");
+  const payload = parseDiscussionPayload(formData, {
+    htmlKeys: ["commentHtml", "comment"],
+    jsonKeys: ["commentJson"],
+  });
+
+  if (!quoteId || !commentId) {
+    throw new Error(t(locale, "Invalid comment payload", "Payload commento non valido"));
+  }
+
+  assertDiscussionPayload(payload, locale, { en: "Comment", it: "del commento" });
+
+  if (profile.role === "customer") {
+    const existing = await getQuoteForCustomer(quoteId, profile.id);
+    if (existing.status !== "draft") {
+      throw new Error(t(locale, "Comments can only be edited while the quote is in draft", "I commenti possono essere modificati solo mentre il preventivo è in bozza"));
+    }
+  } else if (profile.role === "worker") {
+    const access = await assertWorkerAccessToQuote(quoteId, profile.id);
+    if (access.quote.status !== "draft") {
+      throw new Error(t(locale, "Comments can only be edited while the quote is in draft", "I commenti possono essere modificati solo mentre il preventivo è in bozza"));
+    }
+  } else {
+    const existing = await getQuoteForAdmin(quoteId);
+    if (existing.status !== "draft") {
+      throw new Error(t(locale, "Comments can only be edited while the quote is in draft", "I commenti possono essere modificati solo mentre il preventivo è in bozza"));
+    }
+  }
+
+  const existingComment = await getQuoteCommentForMutation(quoteId, commentId);
+  if (profile.role !== "admin" && existingComment.authorId !== profile.id) {
+    throw new Error(t(locale, "You can only edit your own comments", "Puoi modificare solo i tuoi commenti"));
+  }
+
+  const supabase = await assertQuotesBackend();
+  const { error } = await supabase
+    .from("quote_comments")
+    .update({
+      comment_html: payload.html,
+      comment_json: payload.json,
+    })
+    .eq("id", commentId)
+    .eq("quote_id", quoteId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  revalidateQuotesModule(quoteId);
 }
 
 export async function addQuoteSubtaskAction(formData: FormData) {

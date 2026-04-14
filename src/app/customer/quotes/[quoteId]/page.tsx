@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { loadQuotesPageData, startQuoteConversionCheckoutAction } from "@/app/actions/quotes";
-import { CustomerQuoteDetail, quotesPrimaryButtonClass, quotesSecondaryButtonClass } from "@/components/quotes";
+import { addQuoteCommentAction, loadQuoteDiscussionAction, loadQuotesPageData, startQuoteConversionCheckoutAction, updateQuoteCommentAction } from "@/app/actions/quotes";
+import { CustomerQuoteDetail, QuoteDiscussionPanel, quotesPrimaryButtonClass, quotesSecondaryButtonClass } from "@/components/quotes";
 import { QueryToast } from "@/components/ui/query-toast";
 import { requireRole } from "@/lib/auth";
 import { localeTag, t } from "@/lib/i18n";
@@ -67,6 +67,46 @@ export default async function CustomerQuoteViewPage({
         entries={entries}
         comments={comments}
         latestPrepayment={latestPrepayment}
+        discussion={(
+          <QuoteDiscussionPanel
+            title={t(locale, "Discussion", "Discussione")}
+            description={t(locale, "Shared customer, worker, and admin notes for this quote.", "Note condivise di cliente, operatori e amministratore per questo preventivo.")}
+            quoteId={quote.id}
+            tag={tag}
+            comments={comments}
+            currentUserId={profile.id}
+            currentUserRole="customer"
+            canCompose={quote.status === "draft"}
+            loadAction={loadQuoteDiscussionAction}
+            addAction={addQuoteCommentAction}
+            updateAction={updateQuoteCommentAction}
+            labels={{
+              emptyMessage: t(locale, "No comments yet.", "Nessun commento ancora."),
+              noCommentContent: t(locale, "No comment content", "Nessun contenuto commento"),
+              composerLabel: t(locale, "New message", "Nuovo messaggio"),
+              composerPlaceholder: t(locale, "Share clarifications, approvals, or follow-up questions for this quote.", "Condividi chiarimenti, approvazioni o domande di follow-up per questo preventivo."),
+              composerHelpText: t(locale, "Messages refresh automatically while this page stays open.", "I messaggi si aggiornano automaticamente mentre questa pagina resta aperta."),
+              sendLabel: t(locale, "Send message", "Invia messaggio"),
+              sendingLabel: t(locale, "Sending…", "Invio in corso…"),
+              editLabel: t(locale, "Edit", "Modifica"),
+              cancelEditLabel: t(locale, "Cancel", "Annulla"),
+              saveEditLabel: t(locale, "Save changes", "Salva modifiche"),
+              savingEditLabel: t(locale, "Saving…", "Salvataggio in corso…"),
+              editedLabel: t(locale, "Edited", "Modificato"),
+              originalContentLabel: t(locale, "View original message", "Visualizza messaggio originale"),
+              originalContentHint: t(locale, "Use this reference when you need to compare the first version with the latest edit.", "Usa questo riferimento quando devi confrontare la prima versione con l'ultima modifica."),
+              liveUpdatesLabel: t(locale, "Refresh now", "Aggiorna ora"),
+              refreshingLabel: t(locale, "Refreshing…", "Aggiornamento…"),
+              readOnlyLabel: t(locale, "Discussion is read-only once the quote leaves draft.", "La discussione è in sola lettura quando il preventivo non è più in bozza."),
+              errorFallbackMessage: t(locale, "Unable to update discussion right now.", "Impossibile aggiornare la discussione in questo momento."),
+              roleLabels: {
+                admin: t(locale, "Admin", "Admin"),
+                customer: t(locale, "Customer", "Cliente"),
+                worker: t(locale, "Worker", "Operatore"),
+              },
+            }}
+          />
+        )}
         actions={(
           <div className="flex flex-wrap items-center gap-2">
             {canEdit ? <Link href={`/customer/quotes/${quote.id}/edit`} className={quotesSecondaryButtonClass}>{t(locale, "Edit draft", "Modifica bozza")}</Link> : null}

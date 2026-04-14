@@ -1,23 +1,26 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
+  addQuoteCommentAction,
   addQuoteSubtaskAction,
   addQuoteSubtaskEntryAction,
   assignQuoteWorkersAction,
   deleteQuoteSubtaskAction,
   deleteQuoteSubtaskEntryAction,
+  loadQuoteDiscussionAction,
   loadQuotesPageData,
   markQuoteAsPaidAction,
   revertQuoteToDraftAction,
   signQuoteAction,
   switchQuoteToPostpaidAction,
+  updateQuoteCommentAction,
   updateQuoteSubtaskAction,
   updateQuoteSubtaskEntryAction,
 } from "@/app/actions/quotes";
 import { LogoutButton } from "@/components/logout-button";
 import {
-  QuotesCommentsList,
   QuotesHeader,
+  QuoteDiscussionPanel,
   QuoteActionModal,
   QuotesRichTextContent,
   QuotesSectionCard,
@@ -58,7 +61,7 @@ export default async function AdminQuoteViewPage({
 }) {
   const locale = await getLocale();
   const tag = localeTag(locale);
-  await requireRole(["admin"]);
+  const profile = await requireRole(["admin"]);
   const supabase = await createClient();
   const routeParams = await Promise.resolve(params);
   const quoteId = routeParams.quoteId?.trim();
@@ -266,17 +269,43 @@ export default async function AdminQuoteViewPage({
           />
         </div>
 
-        <QuotesCommentsList
+        <QuoteDiscussionPanel
           title={t(locale, "Discussion", "Discussione")}
           description={t(locale, "Review customer and worker notes before sign-off.", "Rivedi note cliente e operatori prima della firma.")}
-          comments={comments.map((comment) => ({
-            id: comment.id,
-            authorName: comment.authorName || t(locale, comment.authorRole === "admin" ? "Admin" : comment.authorRole === "customer" ? "Customer" : "Worker", comment.authorRole === "admin" ? "Admin" : comment.authorRole === "customer" ? "Cliente" : "Operatore"),
-            createdAtLabel: formatDateTime(tag, comment.createdAt),
-            metaLabel: comment.authorRole,
-            body: <QuotesRichTextContent html={comment.commentHtml ?? ""} emptyMessage={t(locale, "No comment content", "Nessun contenuto commento")} />,
-          }))}
-          emptyMessage={t(locale, "No comments yet.", "Nessun commento ancora.")}
+          quoteId={quote.id}
+          tag={tag}
+          comments={comments}
+          currentUserId={profile.id}
+          currentUserRole="admin"
+          canCompose={quote.status === "draft"}
+          loadAction={loadQuoteDiscussionAction}
+          addAction={addQuoteCommentAction}
+          updateAction={updateQuoteCommentAction}
+          labels={{
+            emptyMessage: t(locale, "No comments yet.", "Nessun commento ancora."),
+            noCommentContent: t(locale, "No comment content", "Nessun contenuto commento"),
+            composerLabel: t(locale, "New message", "Nuovo messaggio"),
+            composerPlaceholder: t(locale, "Summarize sign-off decisions, open questions, or staffing follow-ups.", "Riepiloga decisioni di firma, domande aperte o follow-up sul team assegnato."),
+            composerHelpText: t(locale, "Discussion refreshes automatically so you can review updates without leaving the quote.", "La discussione si aggiorna automaticamente così puoi vedere gli aggiornamenti senza lasciare il preventivo."),
+            sendLabel: t(locale, "Send message", "Invia messaggio"),
+            sendingLabel: t(locale, "Sending…", "Invio in corso…"),
+            editLabel: t(locale, "Edit", "Modifica"),
+            cancelEditLabel: t(locale, "Cancel", "Annulla"),
+            saveEditLabel: t(locale, "Save changes", "Salva modifiche"),
+            savingEditLabel: t(locale, "Saving…", "Salvataggio in corso…"),
+            editedLabel: t(locale, "Edited", "Modificato"),
+            originalContentLabel: t(locale, "View original message", "Visualizza messaggio originale"),
+            originalContentHint: t(locale, "Original content stays available so sign-off context is easy to audit after edits.", "Il contenuto originale resta disponibile così il contesto della firma è facile da verificare dopo le modifiche."),
+            liveUpdatesLabel: t(locale, "Refresh now", "Aggiorna ora"),
+            refreshingLabel: t(locale, "Refreshing…", "Aggiornamento…"),
+            readOnlyLabel: t(locale, "Discussion becomes read-only after the quote leaves draft.", "La discussione diventa in sola lettura quando il preventivo non è più in bozza."),
+            errorFallbackMessage: t(locale, "Unable to update discussion right now.", "Impossibile aggiornare la discussione in questo momento."),
+            roleLabels: {
+              admin: t(locale, "Admin", "Admin"),
+              customer: t(locale, "Customer", "Cliente"),
+              worker: t(locale, "Worker", "Operatore"),
+            },
+          }}
         />
       </section>
 

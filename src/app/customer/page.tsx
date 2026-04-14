@@ -174,9 +174,14 @@ export default async function CustomerPage() {
                   
                   <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 mb-8">
                     <div className="flex-1">
-                      <div className="mb-4 flex items-center gap-3">
+                      <div className="mb-4 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
                         <h3 className="text-2xl font-bold text-foreground">{project.name}</h3>
                         {isPostPaid ? <span className="inline-flex items-center rounded-full border border-orange-500/30 bg-orange-500/10 px-2.5 py-0.5 text-xs font-medium text-orange-700 dark:text-orange-300">{t(locale, "Post-paid", "Post-pagato")}</span> : null}
+                        </div>
+                        <Link href={`/customer/projects/${project.id}`} className="rounded-lg border border-border bg-background/60 px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
+                          {t(locale, "Open detail", "Apri dettaglio")}
+                        </Link>
                       </div>
                       
                       <div className={`grid gap-4 mb-4 ${isPostPaid && outstandingDebt > 0 ? 'grid-cols-4' : 'grid-cols-3'}`}>
