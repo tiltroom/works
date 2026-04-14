@@ -108,20 +108,20 @@ security definer
 set search_path = public
 as $$
 declare
-  current_role public.app_role;
+  v_current_role public.app_role;
 begin
   if tg_op = 'INSERT' then
-    current_role := public.get_profile_role(auth.uid());
+    v_current_role := public.get_profile_role(auth.uid());
 
-    if current_role is null then
+    if v_current_role is null then
       raise exception 'profile_not_found';
     end if;
 
-    new.author_id = auth.uid();
-    new.author_role = current_role;
+    new.author_id := auth.uid();
+    new.author_role := v_current_role;
   else
-    new.author_id = old.author_id;
-    new.author_role = old.author_role;
+    new.author_id := old.author_id;
+    new.author_role := old.author_role;
   end if;
 
   return new;
@@ -135,20 +135,20 @@ security definer
 set search_path = public
 as $$
 declare
-  current_role public.app_role;
+  v_current_role public.app_role;
 begin
   if tg_op = 'INSERT' then
-    current_role := public.get_profile_role(auth.uid());
+    v_current_role := public.get_profile_role(auth.uid());
 
-    if current_role is null then
+    if v_current_role is null then
       raise exception 'profile_not_found';
     end if;
 
-    new.author_id = auth.uid();
-    new.author_role = current_role;
+    new.author_id := auth.uid();
+    new.author_role := v_current_role;
   else
-    new.author_id = old.author_id;
-    new.author_role = old.author_role;
+    new.author_id := old.author_id;
+    new.author_role := old.author_role;
   end if;
 
   return new;
