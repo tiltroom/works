@@ -107,7 +107,7 @@ export default async function AdminQuoteViewPage({
   const isPostPaid = quote.billingMode === "postpaid";
   const canAssignWorkers = quote.status === "draft";
   const canSign = quote.status === "draft";
-  const canRevertToDraft = quote.status === "signed";
+  const canRevertToDraft = true;
   const canSwitchToPostpaid = quote.status === "signed" && !quote.linkedProjectName && !isPostPaid && !hasPrepaymentActivity;
   const canMarkAsPaid = quote.status === "signed" && !quote.linkedProjectName && (isPostPaid || !hasPrepaymentActivity);
   const canManageSubtasks = quote.status === "draft";
@@ -563,7 +563,7 @@ export default async function AdminQuoteViewPage({
             </p>
             <div className="rounded-xl border border-border/70 bg-background/60 px-4 py-3 text-sm text-muted-foreground">
               <p className="font-medium text-foreground">{activeRevertQuote.title}</p>
-              <p className="mt-1">{t(locale, "Use this only when no conversion checkout has started for the quote.", "Usa questa azione solo quando non è ancora iniziato alcun checkout di conversione per il preventivo.")}</p>
+              <p className="mt-1">{t(locale, "Admins can always return the quote to draft. This detaches any linked project from the quote and clears signature/conversion state, while keeping project and payment history intact for audit.", "Gli admin possono sempre riportare il preventivo in bozza. Questa azione scollega dal preventivo qualsiasi progetto collegato e azzera lo stato di firma/conversione, mantenendo intatti progetto e storico pagamenti per finalità di audit.")}</p>
             </div>
           </div>
         </QuoteActionModal>

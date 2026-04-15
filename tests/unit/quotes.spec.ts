@@ -31,7 +31,11 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/i18n", () => ({
   getLocale: mockGetLocale,
-  t: (_locale: string, en: string, _it: string) => en,
+  t: (locale: string, en: string, it: string) => {
+    void locale;
+    void it;
+    return en;
+  },
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -141,6 +145,68 @@ function createMockSupabaseForQuoteComments(
       },
     },
   };
+}
+
+function createMockSupabaseForRevertQuote(options?: {
+  status?: "draft" | "signed" | "converted";
+  linkedProjectId?: string | null;
+  convertedAt?: string | null;
+  confirmedAt?: string | null;
+  conversionRequestedAt?: string | null;
+  prepaymentRequestedAt?: string | null;
+}) {
+  const update = vi.fn().mockReturnValue({
+    eq: vi.fn().mockResolvedValue({ error: null }),
+  });
+
+  const quoteData = {
+    id: "quote-revert-1",
+    title: "Quote to revert",
+    status: options?.status ?? "converted",
+    billing_mode: "postpaid",
+    customer_id: "customer-1",
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    linked_project_id: options?.linkedProjectId ?? "project-1",
+    converted_at: options?.convertedAt ?? "2026-04-10T00:00:00Z",
+    signed_by_name: "Admin User",
+    signed_at: "2026-04-08T09:10:00.000Z",
+    signed_by_user_id: "admin-1",
+    confirmed_at: options?.confirmedAt ?? "2026-04-08T09:10:00.000Z",
+    conversion_requested_at: options?.conversionRequestedAt ?? "2026-04-09T10:00:00.000Z",
+    prepayment_requested_at: options?.prepaymentRequestedAt ?? "2026-04-08T09:15:00.000Z",
+  };
+
+  const client = {
+    from(table: string) {
+      if (table === "quotes") {
+        return {
+          select(_columns: string, options?: { head?: boolean }) {
+            if (options?.head) {
+              return Promise.resolve({ data: null, error: null, count: 1 });
+            }
+
+            const filters = new Map<string, unknown>();
+            return {
+              eq(column: string, value: unknown) {
+                filters.set(column, value);
+                return this;
+              },
+              maybeSingle: vi.fn().mockImplementation(async () => ({
+                data: { ...quoteData, id: String(filters.get("id") ?? quoteData.id) },
+                error: null,
+              })),
+            };
+          },
+          update,
+        };
+      }
+
+      throw new Error(`Unexpected table ${table}`);
+    },
+  };
+
+  return { client, update };
 }
 
 beforeEach(() => {
@@ -717,7 +783,7 @@ describe("quotes helpers", () => {
       expect(workerDiscussionSection).toMatch(/canCompose\s*=\s*\{?true\}?/);
     });
 
-    it("worker quote detail page still uses canMutate for non-discussion controls", () => {
+  it("worker quote detail page still uses canMutate for non-discussion controls", () => {
       const pageContent = readFileSync(
         join(process.cwd(), "src/app/worker/quotes/[quoteId]/page.tsx"),
         "utf8",
@@ -725,9 +791,70 @@ describe("quotes helpers", () => {
       const headerActionPattern = /QuotesHeader[\s\S]*?action[\s\S]*?canMutate/;
       expect(pageContent).toMatch(headerActionPattern);
       expect(pageContent).toMatch(/activeSubtaskQuote\s*=\s*canMutate/);
-      expect(pageContent).toMatch(/activeEntryQuote\s*=\s*canMutate/);
-    });
+    expect(pageContent).toMatch(/activeEntryQuote\s*=\s*canMutate/);
   });
+
+  it("admin quote detail keeps revert to draft always visible for admins", () => {
+    const pageContent = readFileSync(
+      join(process.cwd(), "src/app/admin/quotes/[quoteId]/page.tsx"),
+      "utf8",
+    );
+
+    expect(pageContent).toMatch(/const canRevertToDraft = true;/);
+  });
+
+  it("latest quote conversion migration reuses an already linked project before creating one", () => {
+    const migrationSql = readFileSync(
+      join(process.cwd(), "supabase", "2026-04-15-reuse-linked-project-during-quote-conversion.sql"),
+      "utf8",
+    );
+
+    expect(migrationSql).toContain("new_project_id := quote_row.linked_project_id;");
+    expect(migrationSql).toMatch(/if new_project_id is null then\s+insert into public\.projects/s);
+    expect(migrationSql).toMatch(/else\s+update public\.projects p\s+set name = quote_row\.title,[\s\S]*billing_mode = 'postpaid'/);
+  });
+
+  it("allows admins to detach a converted quote back to draft while clearing quote-side conversion state", async () => {
+    mockRequireRole.mockResolvedValue({ id: "admin-1", role: "admin" });
+    const { client, update } = createMockSupabaseForRevertQuote();
+    mockCreateClient.mockResolvedValue(client);
+
+    const { revertQuoteToDraftAction } = await import("@/app/actions/quotes");
+    const formData = new FormData();
+    formData.set("quoteId", "quote-revert-1");
+
+    await expect(revertQuoteToDraftAction(formData)).resolves.toBeUndefined();
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({
+      status: "draft",
+      signed_by_name: null,
+      signed_by_user_id: null,
+      signed_at: null,
+      linked_project_id: null,
+      converted_at: null,
+    }));
+    expect(mockRevalidatePath).toHaveBeenCalled();
+  });
+
+  it("rejects revert to draft when the quote is already draft", async () => {
+    mockRequireRole.mockResolvedValue({ id: "admin-1", role: "admin" });
+    const { client, update } = createMockSupabaseForRevertQuote({
+      status: "draft",
+      linkedProjectId: null,
+      convertedAt: null,
+      confirmedAt: null,
+      conversionRequestedAt: null,
+      prepaymentRequestedAt: null,
+    });
+    mockCreateClient.mockResolvedValue(client);
+
+    const { revertQuoteToDraftAction } = await import("@/app/actions/quotes");
+    const formData = new FormData();
+    formData.set("quoteId", "quote-revert-1");
+
+    await expect(revertQuoteToDraftAction(formData)).rejects.toThrow("Quote is already in draft");
+    expect(update).not.toHaveBeenCalled();
+  });
+});
 
   it("requires current project access in the project discussion update and delete policies", () => {
     const migrationSql = readFileSync(

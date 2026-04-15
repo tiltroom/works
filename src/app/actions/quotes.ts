@@ -1077,33 +1077,23 @@ export async function revertQuoteToDraftAction(formData: FormData) {
   }
 
   const existing = await getQuoteForAdmin(quoteId);
-  if (existing.status !== "signed") {
-    throw new Error(t(locale, "Only signed quotes can be returned to draft", "Solo i preventivi firmati possono tornare in bozza"));
-  }
-
-  if (existing.linkedProjectId) {
-    throw new Error(t(locale, "Converted quotes cannot be returned to draft", "I preventivi convertiti non possono tornare in bozza"));
+  if (existing.status === "draft") {
+    throw new Error(t(locale, "Quote is already in draft", "Il preventivo è già in bozza"));
   }
 
   const supabase = await assertQuotesBackend();
-  const { data: prepaymentSessions, error: prepaymentError } = await supabase
-    .from("quote_prepayment_sessions")
-    .select("id")
-    .eq("quote_id", quoteId)
-    .in("status", ["pending", "paid"]);
-
-  if (prepaymentError) {
-    throw new Error(prepaymentError.message);
-  }
-
-  if ((prepaymentSessions ?? []).length > 0) {
-    throw new Error(t(locale, "Quotes with prepayment activity cannot be returned to draft", "I preventivi con attività di prepagamento non possono tornare in bozza"));
-  }
-
   const now = new Date().toISOString();
   const { error } = await supabase
     .from("quotes")
-    .update({ status: "draft", signed_by_name: null, signed_by_user_id: null, signed_at: null, updated_at: now })
+    .update({
+      status: "draft",
+      signed_by_name: null,
+      signed_by_user_id: null,
+      signed_at: null,
+      linked_project_id: null,
+      converted_at: null,
+      updated_at: now,
+    })
     .eq("id", quoteId);
 
   if (error) {
@@ -1130,10 +1120,6 @@ export async function switchQuoteToPostpaidAction(formData: FormData) {
 
   if (existing.billingMode === "postpaid") {
     throw new Error(t(locale, "Quote is already post-paid", "Il preventivo è già post-pagato"));
-  }
-
-  if (existing.linkedProjectId) {
-    throw new Error(t(locale, "Quote already converted", "Preventivo già convertito"));
   }
 
   const admin = createAdminClient();
@@ -1174,10 +1160,6 @@ export async function markQuoteAsPaidAction(formData: FormData) {
   const existing = await getQuoteForAdmin(quoteId);
   if (existing.status !== "signed") {
     throw new Error(t(locale, "Only signed quotes can be marked as paid", "Solo i preventivi firmati possono essere segnati come pagati"));
-  }
-
-  if (existing.linkedProjectId) {
-    throw new Error(t(locale, "Quote already converted", "Preventivo già convertito"));
   }
 
   const isPostPaid = existing.billingMode === "postpaid";
