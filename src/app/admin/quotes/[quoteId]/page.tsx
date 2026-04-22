@@ -107,7 +107,7 @@ export default async function AdminQuoteViewPage({
   const isPostPaid = quote.billingMode === "postpaid";
   const canAssignWorkers = quote.status === "draft";
   const canSign = quote.status === "draft";
-  const canRevertToDraft = true;
+  const canRevertToDraft = quote.status !== "draft";
   const canSwitchToPostpaid = quote.status === "signed" && !quote.linkedProjectName && !isPostPaid && !hasPrepaymentActivity;
   const canMarkAsPaid = quote.status === "signed" && !quote.linkedProjectName && (isPostPaid || !hasPrepaymentActivity);
   const canManageSubtasks = quote.status === "draft";

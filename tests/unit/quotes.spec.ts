@@ -800,13 +800,13 @@ describe("quotes helpers", () => {
     expect(pageContent).toMatch(/activeEntryQuote\s*=\s*canMutate/);
   });
 
-  it("admin quote detail keeps revert to draft always visible for admins", () => {
+  it("admin quote detail only shows revert to draft for non-draft quotes", () => {
     const pageContent = readFileSync(
       join(process.cwd(), "src/app/admin/quotes/[quoteId]/page.tsx"),
       "utf8",
     );
 
-    expect(pageContent).toMatch(/const canRevertToDraft = true;/);
+    expect(pageContent).toMatch(/const canRevertToDraft = quote\.status !== "draft";/);
   });
 
   it("latest quote conversion migration reuses an already linked project before creating one", () => {
