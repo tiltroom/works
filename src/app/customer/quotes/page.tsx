@@ -71,7 +71,7 @@ export default async function CustomerQuotesPage({
             {t(locale, "Quotes", "Preventivi e quotazioni")}
           </h1>
           <p className="mt-1 text-muted-foreground">
-            {t(locale, "Draft the quote, collaborate through notes and subtasks, then convert it with one prepayment step after admin sign-off.", "Prepara il preventivo, collabora tramite note e sottoattività, poi convertilo con un unico passaggio di prepagamento dopo la firma dell'amministratore.")}
+            {t(locale, "Draft the quote, collaborate through notes and subtasks, then sign after admin approval to start the selected prepaid or post-paid conversion flow.", "Prepara il preventivo, collabora tramite note e sottoattività, poi firma dopo l'approvazione admin per avviare il flusso prepagato o post-pagato selezionato.")}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -132,8 +132,7 @@ export default async function CustomerQuotesPage({
                   {quotesData.quotes.map((quote) => {
                     const canEdit = quote.status === "draft";
                     const canDelete = quote.status === "draft";
-                    const canCheckout = quote.status === "signed" && !quote.linkedProjectId && quote.billingMode !== "postpaid";
-                    const isPostPaidAwaiting = quote.status === "signed" && !quote.linkedProjectId && quote.billingMode === "postpaid";
+                    const canCustomerSign = quote.status === "signed" && !quote.linkedProjectId && !quote.customerSignedAt;
 
                     return (
                       <tr key={quote.id} className="transition-colors hover:bg-accent/60">
@@ -152,14 +151,15 @@ export default async function CustomerQuotesPage({
                             <Link href={`/customer/quotes/${quote.id}`} className={quotesSecondaryButtonClass}>{t(locale, "View", "Vedi")}</Link>
                             {canEdit ? <Link href={`/customer/quotes/${quote.id}/edit`} className={quotesSecondaryButtonClass}>{t(locale, "Edit", "Modifica")}</Link> : null}
                             {canDelete ? <Link href={`/customer/quotes?deleteQuoteId=${quote.id}`} className="inline-flex items-center justify-center rounded-lg border border-red-500/40 bg-red-500/5 px-3 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-500/10 dark:text-red-300">{t(locale, "Delete", "Elimina")}</Link> : null}
-                            {canCheckout ? (
+                            {canCustomerSign ? (
                               <form action={startQuoteConversionCheckoutAction}>
                                 <input type="hidden" name="quoteId" value={quote.id} />
-                                <button className={quotesPrimaryButtonClass}>{t(locale, "Convert & prepay", "Converti e pre-paga")}</button>
+                                <button className={quotesPrimaryButtonClass}>
+                                  {quote.billingMode === "postpaid"
+                                    ? t(locale, "Sign & convert", "Firma e converti")
+                                    : t(locale, "Sign & Stripe", "Firma e Stripe")}
+                                </button>
                               </form>
-                            ) : null}
-                            {isPostPaidAwaiting ? (
-                              <span className="inline-flex items-center justify-center rounded-lg border border-border/70 bg-muted/50 px-3 py-2 text-sm text-muted-foreground">{t(locale, "Post-paid (admin converts)", "Post-pagato (admin converte)")}</span>
                             ) : null}
                           </div>
                         </td>

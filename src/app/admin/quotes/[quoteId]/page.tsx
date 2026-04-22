@@ -101,15 +101,13 @@ export default async function AdminQuoteViewPage({
   const subtaskIds = new Set(subtasks.map((subtask) => subtask.id));
   const entries = quotesData.subtaskEntries.filter((entry) => subtaskIds.has(entry.quoteSubtaskId));
   const comments = quotesData.comments.filter((comment) => comment.quoteId === quote.id);
-  const quotePrepaymentSessions = quotesData.prepaymentSessions.filter((session) => session.quoteId === quote.id);
   const latestPrepayment = quotesData.prepaymentSessions.find((session) => session.quoteId === quote.id) ?? null;
-  const hasPrepaymentActivity = quotePrepaymentSessions.some((session) => session.status === "pending" || session.status === "paid");
   const isPostPaid = quote.billingMode === "postpaid";
   const canAssignWorkers = quote.status === "draft";
   const canSign = quote.status === "draft";
   const canRevertToDraft = quote.status !== "draft";
-  const canSwitchToPostpaid = quote.status === "signed" && !quote.linkedProjectName && !isPostPaid && !hasPrepaymentActivity;
-  const canMarkAsPaid = quote.status === "signed" && !quote.linkedProjectName && (isPostPaid || !hasPrepaymentActivity);
+  const canSwitchToPostpaid = false;
+  const canMarkAsPaid = false;
   const canManageSubtasks = quote.status === "draft";
   const canManageEntries = quote.status === "draft";
   const activeAssignQuote = canAssignWorkers && assignWorkersId === quote.id ? quote : null;
@@ -182,11 +180,26 @@ export default async function AdminQuoteViewPage({
           </QuotesSectionCard>
 
           <QuotesSignatureSummary
-            title={t(locale, "Signature", "Firma")}
-            signerLabel={t(locale, "Signer", "Firmatario")}
-            signedAtTitle={t(locale, "Signed at", "Firmato il")}
-            signerName={quote.signedByName}
-            signedAtLabel={formatDateTime(tag, quote.signedAt)}
+            title={t(locale, "Signatures", "Firme")}
+            description={t(locale, "Admin signature locks the quote and selected billing mode. Customer signature completes approval and starts conversion.", "La firma admin blocca il preventivo e la modalità di fatturazione scelta. La firma cliente completa l'approvazione e avvia la conversione.")}
+            signatureSteps={[
+              {
+                key: "admin",
+                signerLabel: t(locale, "Admin signer", "Firmatario admin"),
+                signedAtTitle: t(locale, "Admin signed at", "Firma admin il"),
+                signerName: quote.signedByName,
+                signedAtLabel: formatDateTime(tag, quote.signedAt),
+                emptyMessage: t(locale, "Waiting for admin signature.", "In attesa della firma admin."),
+              },
+              {
+                key: "customer",
+                signerLabel: t(locale, "Customer signer", "Firmatario cliente"),
+                signedAtTitle: t(locale, "Customer signed at", "Firma cliente il"),
+                signerName: quote.customerSignedByName,
+                signedAtLabel: formatDateTime(tag, quote.customerSignedAt),
+                emptyMessage: t(locale, "Waiting for customer signature.", "In attesa della firma cliente."),
+              },
+            ]}
             emptyMessage={t(locale, "Not signed yet.", "Non ancora firmato.")}
           />
         </div>
@@ -535,8 +548,25 @@ export default async function AdminQuoteViewPage({
         >
           <input type="hidden" name="quoteId" value={activeSignQuote.id} />
           <p className="text-sm text-muted-foreground">
-            {t(locale, "Signing ends the editable draft phase and unlocks the customer’s single convert + prepay step.", "La firma chiude la fase di bozza modificabile e sblocca l'unico passaggio cliente di conversione + prepagamento.")}
+            {t(locale, "Signing ends the editable draft phase. Choose whether the customer signature should redirect to Stripe for prepaid conversion or convert immediately as post-paid.", "La firma chiude la fase di bozza modificabile. Scegli se la firma cliente deve reindirizzare a Stripe per conversione prepagata o convertire subito come post-pagato.")}
           </p>
+          <fieldset className="space-y-3 rounded-xl border border-border/70 bg-background/60 px-4 py-3">
+            <legend className="text-sm font-medium text-foreground">{t(locale, "Billing mode", "Modalità di fatturazione")}</legend>
+            <label className="flex items-start gap-3 text-sm text-muted-foreground">
+              <input type="radio" name="billingMode" value="prepaid" defaultChecked className="mt-1" />
+              <span>
+                <span className="block font-medium text-foreground">{t(locale, "Prepaid", "Prepagato")}</span>
+                {t(locale, "After customer signature, redirect to Stripe checkout. Conversion completes after payment confirmation.", "Dopo la firma cliente, reindirizza al checkout Stripe. La conversione si completa alla conferma del pagamento.")}
+              </span>
+            </label>
+            <label className="flex items-start gap-3 text-sm text-muted-foreground">
+              <input type="radio" name="billingMode" value="postpaid" className="mt-1" />
+              <span>
+                <span className="block font-medium text-foreground">{t(locale, "Post-paid", "Post-pagato")}</span>
+                {t(locale, "After customer signature, convert the quote to a post-paid project immediately.", "Dopo la firma cliente, converti subito il preventivo in progetto post-pagato.")}
+              </span>
+            </label>
+          </fieldset>
           <div className="rounded-xl border border-border/70 bg-background/60 px-4 py-3 text-sm text-muted-foreground">
             {t(locale, "The quote will be signed using your current admin profile name.", "Il preventivo verrà firmato usando il nome attuale del tuo profilo admin.")}
           </div>

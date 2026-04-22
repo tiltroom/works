@@ -76,11 +76,25 @@ export function CustomerQuoteDetail({
 
         <QuotesSignatureSummary
           title={t(locale, "Sign-off", "Firma")}
-          description={t(locale, "Admin sign-off unlocks the single conversion + prepayment step.", "La firma dell'amministratore sblocca l'unico passaggio di conversione + prepagamento.")}
-          signerLabel={t(locale, "Signer", "Firmatario")}
-          signedAtTitle={t(locale, "Signed at", "Firmato il")}
-          signerName={quote.signedByName}
-          signedAtLabel={formatDateTime(tag, quote.signedAt)}
+          description={t(locale, "Admin signs first and selects prepaid or post-paid. Customer signature then starts the matching conversion flow.", "L'admin firma per primo e seleziona prepagato o post-pagato. La firma cliente avvia poi il relativo flusso di conversione.")}
+          signatureSteps={[
+            {
+              key: "admin",
+              signerLabel: t(locale, "Admin signer", "Firmatario admin"),
+              signedAtTitle: t(locale, "Admin signed at", "Firma admin il"),
+              signerName: quote.signedByName,
+              signedAtLabel: formatDateTime(tag, quote.signedAt),
+              emptyMessage: t(locale, "Waiting for admin signature.", "In attesa della firma dell'amministratore."),
+            },
+            {
+              key: "customer",
+              signerLabel: t(locale, "Customer signer", "Firmatario cliente"),
+              signedAtTitle: t(locale, "Customer signed at", "Firma cliente il"),
+              signerName: quote.customerSignedByName,
+              signedAtLabel: formatDateTime(tag, quote.customerSignedAt),
+              emptyMessage: t(locale, "Waiting for your signature.", "In attesa della tua firma."),
+            },
+          ]}
           emptyMessage={t(locale, "Waiting for admin signature.", "In attesa della firma dell'amministratore.")}
         />
       </div>
@@ -126,9 +140,11 @@ export function CustomerQuoteDetail({
           <div className="space-y-3 text-sm text-muted-foreground">
             <p>
               {quote.status === "draft"
-                ? t(locale, "Customer editing and team collaboration are still open. Conversion becomes available only after admin sign-off.", "La modifica cliente e la collaborazione del team sono ancora aperte. La conversione diventa disponibile solo dopo la firma dell'amministratore.")
+                ? t(locale, "Customer editing and team collaboration are still open. Customer signature becomes available only after admin sign-off.", "La modifica cliente e la collaborazione del team sono ancora aperte. La firma cliente diventa disponibile solo dopo la firma dell'amministratore.")
                 : quote.status === "signed"
-                  ? t(locale, "Admin sign-off is complete. Use the button above to pay once and convert this quote into a project with the estimated hours.", "La firma dell'amministratore è completa. Usa il pulsante sopra per pagare una volta e convertire questo preventivo in un progetto con le ore stimate.")
+                  ? quote.billingMode === "postpaid"
+                    ? t(locale, "Admin sign-off is complete. Sign your part to convert this quote into a post-paid project.", "La firma dell'amministratore è completa. Firma la tua parte per convertire questo preventivo in un progetto post-pagato.")
+                    : t(locale, "Admin sign-off is complete. Sign your part to continue to Stripe and convert this quote after prepayment.", "La firma dell'amministratore è completa. Firma la tua parte per proseguire su Stripe e convertire questo preventivo dopo il prepagamento.")
                   : t(locale, "This quote has already been converted into a project.", "Questo preventivo è già stato convertito in un progetto.")}
             </p>
             <div className="grid gap-3 sm:grid-cols-2">

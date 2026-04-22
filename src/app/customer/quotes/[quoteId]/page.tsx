@@ -42,7 +42,7 @@ export default async function CustomerQuoteViewPage({
   const comments = quotesData.comments.filter((comment) => comment.quoteId === quote.id);
   const latestPrepayment = quotesData.prepaymentSessions.find((session) => session.quoteId === quote.id) ?? null;
   const canEdit = quote.status === "draft";
-  const canCheckout = quote.status === "signed" && !quote.linkedProjectId;
+  const canCustomerSign = quote.status === "signed" && !quote.linkedProjectId && !quote.customerSignedAt;
 
   return (
     <main className="w-full space-y-8">
@@ -110,10 +110,14 @@ export default async function CustomerQuoteViewPage({
         actions={(
           <div className="flex flex-wrap items-center gap-2">
             {canEdit ? <Link href={`/customer/quotes/${quote.id}/edit`} className={quotesSecondaryButtonClass}>{t(locale, "Edit draft", "Modifica bozza")}</Link> : null}
-            {canCheckout ? (
+            {canCustomerSign ? (
               <form action={startQuoteConversionCheckoutAction}>
                 <input type="hidden" name="quoteId" value={quote.id} />
-                <button className={quotesPrimaryButtonClass}>{t(locale, "Convert & prepay", "Converti e pre-paga")}</button>
+                <button className={quotesPrimaryButtonClass}>
+                  {quote.billingMode === "postpaid"
+                    ? t(locale, "Sign & convert", "Firma e converti")
+                    : t(locale, "Sign & continue to Stripe", "Firma e continua su Stripe")}
+                </button>
               </form>
             ) : null}
           </div>
