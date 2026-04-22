@@ -419,6 +419,9 @@ export async function loadQuotesPageData(role: AppRole, profileId: string): Prom
     if (quote.signedByUserId) {
       profileIds.add(quote.signedByUserId);
     }
+    if (quote.customerSignedByUserId) {
+      profileIds.add(quote.customerSignedByUserId);
+    }
     if (quote.createdBy) {
       profileIds.add(quote.createdBy);
     }
@@ -473,6 +476,7 @@ export async function loadQuotesPageData(role: AppRole, profileId: string): Prom
     ...quote,
     customerName: quote.customerName ?? profileNameById.get(quote.customerId) ?? null,
     signedByName: quote.signedByUserId ? profileNameById.get(quote.signedByUserId) ?? quote.signedByName : quote.signedByName,
+    customerSignedByName: quote.customerSignedByUserId ? profileNameById.get(quote.customerSignedByUserId) ?? quote.customerSignedByName : quote.customerSignedByName,
     linkedProjectName: quote.linkedProjectId ? projectNameById.get(quote.linkedProjectId) ?? null : null,
     projectName: quote.linkedProjectId ? projectNameById.get(quote.linkedProjectId) ?? null : null,
   }));
@@ -1048,10 +1052,15 @@ export async function signQuoteAction(formData: FormData) {
   const locale = await getLocale();
   const admin = await requireRole(["admin"]);
   const quoteId = trimString(formData, "quoteId");
+  const billingMode = trimString(formData, "billingMode");
   const signatureName = admin.full_name?.trim() || "";
 
   if (!quoteId || !signatureName) {
     throw new Error(t(locale, "Admin profile name is required to sign quotes", "Il nome del profilo admin è obbligatorio per firmare i preventivi"));
+  }
+
+  if (billingMode !== "prepaid" && billingMode !== "postpaid") {
+    throw new Error(t(locale, "Select prepaid or post-paid before signing", "Seleziona prepagato o post-pagato prima di firmare"));
   }
 
   const existing = await getQuoteForAdmin(quoteId);
@@ -1063,7 +1072,14 @@ export async function signQuoteAction(formData: FormData) {
   const now = new Date().toISOString();
   const { error } = await supabase
     .from("quotes")
-    .update({ status: "signed", signed_by_name: signatureName, signed_by_user_id: admin.id, signed_at: now, updated_at: now })
+    .update({
+      status: "signed",
+      billing_mode: billingMode,
+      signed_by_name: signatureName,
+      signed_by_user_id: admin.id,
+      signed_at: now,
+      updated_at: now,
+    })
     .eq("id", quoteId);
 
   if (error) {
@@ -1093,9 +1109,13 @@ export async function revertQuoteToDraftAction(formData: FormData) {
     .from("quotes")
     .update({
       status: "draft",
+      billing_mode: "prepaid",
       signed_by_name: null,
       signed_by_user_id: null,
       signed_at: null,
+      customer_signed_by_name: null,
+      customer_signed_by_user_id: null,
+      customer_signed_at: null,
       linked_project_id: null,
       converted_at: null,
       updated_at: now,
@@ -1125,6 +1145,10 @@ export async function switchQuoteToPostpaidAction(formData: FormData) {
   const existing = await getQuoteForAdmin(quoteId);
   if (existing.status !== "signed") {
     throw new Error(t(locale, "Only signed quotes can be switched to post-paid", "Solo i preventivi firmati possono essere convertiti in post-pagato"));
+  }
+
+  if (!existing.customerSignedAt) {
+    throw new Error(t(locale, "Customer signature is required before conversion", "La firma cliente è obbligatoria prima della conversione"));
   }
 
   if (existing.billingMode === "postpaid") {
@@ -1173,6 +1197,10 @@ export async function markQuoteAsPaidAction(formData: FormData) {
   const existing = await getQuoteForAdmin(quoteId);
   if (existing.status !== "signed") {
     throw new Error(t(locale, "Only signed quotes can be marked as paid", "Solo i preventivi firmati possono essere segnati come pagati"));
+  }
+
+  if (!existing.customerSignedAt) {
+    throw new Error(t(locale, "Customer signature is required before conversion", "La firma cliente è obbligatoria prima della conversione"));
   }
 
   const isPostPaid = existing.billingMode === "postpaid";
@@ -1244,7 +1272,7 @@ export async function createCheckoutForQuotePrepaymentAction(formData: FormData)
 
   const existing = await getQuoteForCustomer(quoteId, profile.id);
   if (existing.status !== "signed") {
-    throw new Error(t(locale, "Only signed quotes can be prepaid", "Solo i preventivi firmati possono essere prepagati"));
+    throw new Error(t(locale, "Only admin-signed quotes can be customer-signed", "Solo i preventivi firmati dall'admin possono essere firmati dal cliente"));
   }
 
   if (existing.linkedProjectId) {
@@ -1252,7 +1280,12 @@ export async function createCheckoutForQuotePrepaymentAction(formData: FormData)
   }
 
   if (existing.billingMode === "postpaid") {
-    throw new Error(t(locale, "Post-paid quotes are converted by the administrator", "I preventivi post-pagati vengono convertiti dall'amministratore"));
+    throw new Error(t(locale, "Post-paid quotes are converted immediately after customer signature", "I preventivi post-pagati vengono convertiti subito dopo la firma del cliente"));
+  }
+
+  const signatureName = profile.full_name?.trim() || "";
+  if (!signatureName) {
+    throw new Error(t(locale, "Customer profile name is required to sign quotes", "Il nome del profilo cliente è obbligatorio per firmare i preventivi"));
   }
 
   const estimatedHours = existing.totalEstimatedHours ?? 0;
@@ -1323,6 +1356,24 @@ export async function createCheckoutForQuotePrepaymentAction(formData: FormData)
     throw new Error(t(locale, "Missing checkout session data", "Dati sessione checkout mancanti"));
   }
 
+  if (!existing.customerSignedAt && !existing.customerSignedByUserId) {
+    const signatureTimestamp = new Date().toISOString();
+    const { error: signatureError } = await supabase
+      .from("quotes")
+      .update({
+        customer_signed_by_name: signatureName,
+        customer_signed_by_user_id: profile.id,
+        customer_signed_at: signatureTimestamp,
+        updated_at: signatureTimestamp,
+      })
+      .eq("id", quoteId)
+      .is("customer_signed_at", null);
+
+    if (signatureError) {
+      throw new Error(signatureError.message);
+    }
+  }
+
   const { error } = await supabase.from("quote_prepayment_sessions").insert({
     quote_id: quoteId,
     customer_id: profile.id,
@@ -1349,5 +1400,80 @@ export async function requestQuoteConversionAction(formData: FormData) {
 }
 
 export async function startQuoteConversionCheckoutAction(formData: FormData) {
+  const locale = await getLocale();
+  const profile = await requireRole(["customer"]);
+  const quoteId = trimString(formData, "quoteId");
+
+  if (!quoteId) {
+    throw new Error(t(locale, "Quote id is required", "L'ID del preventivo è obbligatorio"));
+  }
+
+  const existing = await getQuoteForCustomer(quoteId, profile.id);
+  if (existing.status !== "signed") {
+    throw new Error(t(locale, "Only admin-signed quotes can be customer-signed", "Solo i preventivi firmati dall'admin possono essere firmati dal cliente"));
+  }
+
+  if (existing.linkedProjectId) {
+    throw new Error(t(locale, "Quote already converted", "Preventivo già convertito"));
+  }
+
+  if (existing.billingMode === "postpaid") {
+    const signatureName = profile.full_name?.trim() || "";
+    if (!signatureName) {
+      throw new Error(t(locale, "Customer profile name is required to sign quotes", "Il nome del profilo cliente è obbligatorio per firmare i preventivi"));
+    }
+
+    if (existing.customerSignedAt || existing.customerSignedByUserId) {
+      throw new Error(t(locale, "Quote already signed by customer", "Preventivo già firmato dal cliente"));
+    }
+
+    const now = new Date().toISOString();
+    const supabase = await assertQuotesBackend();
+    const { error: signatureError } = await supabase
+      .from("quotes")
+      .update({
+        customer_signed_by_name: signatureName,
+        customer_signed_by_user_id: profile.id,
+        customer_signed_at: now,
+        updated_at: now,
+      })
+      .eq("id", quoteId)
+      .is("customer_signed_at", null);
+
+    if (signatureError) {
+      throw new Error(signatureError.message);
+    }
+
+    const admin = createAdminClient();
+    const { error } = await admin.rpc("apply_postpaid_quote_conversion", {
+      p_quote_id: quoteId,
+      p_admin_comment: null,
+    });
+
+    if (error) {
+      if (error.message.includes("quote_not_found")) {
+        throw new Error(t(locale, "Quote not found", "Preventivo non trovato"));
+      }
+
+      if (error.message.includes("quote_not_signed")) {
+        throw new Error(t(locale, "Quote must be admin-signed before customer conversion", "Il preventivo deve essere firmato dall'admin prima della conversione cliente"));
+      }
+
+      throw new Error(error.message);
+    }
+
+    revalidateQuotesModule(quoteId);
+    after(async () => {
+      await notifyQuoteConverted(quoteId);
+    });
+    redirect(
+      withQueryToast(
+        `/customer/quotes/${quoteId}`,
+        "success",
+        t(locale, "Quote signed and converted successfully", "Preventivo firmato e convertito con successo"),
+      ),
+    );
+  }
+
   return createCheckoutForQuotePrepaymentAction(formData);
 }
