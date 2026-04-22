@@ -64,6 +64,9 @@ export interface Quote {
   signed_by_name: string | null;
   signed_at: string | null;
   signed_by_user_id: string | null;
+  customer_signed_by_name: string | null;
+  customer_signed_at: string | null;
+  customer_signed_by_user_id: string | null;
   linked_project_id: string | null;
   converted_at: string | null;
   created_by: string | null;

@@ -20,6 +20,9 @@ export interface QuoteRecord {
   signedByName: string | null;
   signedAt: string | null;
   signedByUserId: string | null;
+  customerSignedByName: string | null;
+  customerSignedAt: string | null;
+  customerSignedByUserId: string | null;
   linkedProjectId: string | null;
   linkedProjectName: string | null;
   projectId: string | null;
@@ -230,6 +233,9 @@ export function parseQuoteRecord(row: RawRecord): QuoteRecord {
     signedByName: asNullableString(row.signed_by_name),
     signedAt: asNullableString(row.signed_at),
     signedByUserId: asNullableString(row.signed_by_user_id),
+    customerSignedByName: asNullableString(row.customer_signed_by_name),
+    customerSignedAt: asNullableString(row.customer_signed_at),
+    customerSignedByUserId: asNullableString(row.customer_signed_by_user_id),
     linkedProjectId,
     linkedProjectName,
     projectId: linkedProjectId,
