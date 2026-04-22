@@ -1,8 +1,9 @@
 import { headers } from "next/headers";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { env } from "@/lib/env";
 import { getStripeClient } from "@/lib/stripe";
+import { notifyQuoteConverted } from "@/lib/notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -75,6 +76,10 @@ export async function POST(request: Request) {
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
+
+      after(async () => {
+        await notifyQuoteConverted(quoteId, `stripe:${event.id}`);
+      });
 
       return NextResponse.json({ received: true });
     }

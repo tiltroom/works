@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { getCurrentUser, requireRole } from "@/lib/auth";
 import { env } from "@/lib/env";
@@ -26,6 +27,7 @@ import {
   type QuoteWorkerRecord,
 } from "@/lib/quotes";
 import { getStripeClient } from "@/lib/stripe";
+import { notifyQuoteCreated, notifyQuoteConverted, notifyQuoteReverted } from "@/lib/notifications";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { AppRole } from "@/lib/types";
@@ -547,6 +549,10 @@ export async function createQuoteDraftAction(formData: FormData) {
   }
 
   revalidateQuotesModule(quoteId);
+
+  after(async () => {
+    await notifyQuoteCreated(quoteId, profile.id);
+  });
 
   redirect(
     withQueryToast(
@@ -1101,6 +1107,9 @@ export async function revertQuoteToDraftAction(formData: FormData) {
   }
 
   revalidateQuotesModule(quoteId);
+  after(async () => {
+    await notifyQuoteReverted(quoteId);
+  });
 }
 
 export async function switchQuoteToPostpaidAction(formData: FormData) {
@@ -1145,6 +1154,10 @@ export async function switchQuoteToPostpaidAction(formData: FormData) {
   }
 
   revalidateQuotesModule(quoteId);
+
+  after(async () => {
+    await notifyQuoteConverted(quoteId);
+  });
 }
 
 export async function markQuoteAsPaidAction(formData: FormData) {
@@ -1213,6 +1226,10 @@ export async function markQuoteAsPaidAction(formData: FormData) {
   }
 
   revalidateQuotesModule(quoteId);
+
+  after(async () => {
+    await notifyQuoteConverted(quoteId);
+  });
 }
 
 export async function createCheckoutForQuotePrepaymentAction(formData: FormData) {

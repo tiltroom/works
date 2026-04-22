@@ -20,6 +20,12 @@ vi.mock("next/cache", () => ({
   revalidatePath: mockRevalidatePath,
 }));
 
+vi.mock("next/server", () => ({
+  after: (callback: () => void | Promise<void>) => {
+    void callback();
+  },
+}));
+
 vi.mock("next/navigation", () => ({
   redirect: vi.fn(),
 }));
