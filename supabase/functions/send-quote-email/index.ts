@@ -1,5 +1,9 @@
 import nodemailer from "npm:nodemailer@6.9.10";
-import { corsHeaders } from "../_shared/cors.ts";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
 
 interface EmailPayload {
   to: string;
