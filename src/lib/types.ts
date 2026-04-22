@@ -6,6 +6,7 @@ export interface Profile {
   id: string;
   full_name: string | null;
   role: AppRole;
+  locale: string;
   custom_hourly_rate_cents?: number | null;
 }
 
