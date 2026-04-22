@@ -8,4 +8,11 @@ export const env = {
   quotesUploadsBucket: process.env.QUOTES_UPLOADS_BUCKET ?? "quotes-assets",
   stripePricePerHourCents: Number(process.env.STRIPE_PRICE_PER_HOUR_CENTS ?? "5000"),
   stripeCurrency: process.env.STRIPE_CURRENCY ?? "usd",
+  edgeFunctionSecret: process.env.EDGE_FUNCTION_SECRET ?? "",
+  edgeFunctionUrl: process.env.EDGE_FUNCTION_URL ?? "",
+  smtpHost: process.env.SMTP_HOST ?? "",
+  smtpPort: process.env.SMTP_PORT ?? "2587",
+  smtpUser: process.env.SMTP_USERNAME ?? "",
+  smtpPass: process.env.SMTP_PASSWORD ?? "",
+  smtpFrom: process.env.SMTP_FROM ?? "",
 };
