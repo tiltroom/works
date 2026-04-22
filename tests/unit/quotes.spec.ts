@@ -820,6 +820,41 @@ describe("quotes helpers", () => {
     expect(migrationSql).toMatch(/else\s+update public\.projects p\s+set name = quote_row\.title,[\s\S]*billing_mode = 'postpaid'/);
   });
 
+  it("adds customer signature fields and requires them before converted quote state", () => {
+    const migrationSql = readFileSync(
+      join(process.cwd(), "supabase", "2026-04-16-add-customer-quote-signature.sql"),
+      "utf8",
+    );
+
+    expect(migrationSql).toContain("customer_signed_by_name text");
+    expect(migrationSql).toContain("customer_signed_at timestamptz");
+    expect(migrationSql).toContain("customer_signed_by_user_id uuid");
+    expect(migrationSql).toMatch(/status = 'converted'[\s\S]*customer_signed_by_name[\s\S]*customer_signed_at[\s\S]*customer_signed_by_user_id/);
+  });
+
+  it("requires customer signature in the latest quote conversion functions", () => {
+    const migrationSql = readFileSync(
+      join(process.cwd(), "supabase", "2026-04-16-require-customer-signature-for-quote-conversion.sql"),
+      "utf8",
+    );
+
+    expect(migrationSql).toContain("quote_not_customer_signed");
+    expect(migrationSql).toMatch(/convert_quote_to_project_core[\s\S]*customer_signed_at is null/);
+    expect(migrationSql).toMatch(/apply_postpaid_quote_conversion[\s\S]*customer_signed_at is null/);
+  });
+
+  it("admin sign modal asks for prepaid or post-paid billing mode", () => {
+    const pageContent = readFileSync(
+      join(process.cwd(), "src/app/admin/quotes/[quoteId]/page.tsx"),
+      "utf8",
+    );
+
+    expect(pageContent).toContain('name="billingMode" value="prepaid"');
+    expect(pageContent).toContain('name="billingMode" value="postpaid"');
+    expect(pageContent).toContain('const canSwitchToPostpaid = false;');
+    expect(pageContent).toContain('const canMarkAsPaid = false;');
+  });
+
   it("allows admins to detach a converted quote back to draft while clearing quote-side conversion state", async () => {
     mockRequireRole.mockResolvedValue({ id: "admin-1", role: "admin" });
     const { client, update } = createMockSupabaseForRevertQuote();
@@ -832,9 +867,13 @@ describe("quotes helpers", () => {
     await expect(revertQuoteToDraftAction(formData)).resolves.toBeUndefined();
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       status: "draft",
+      billing_mode: "prepaid",
       signed_by_name: null,
       signed_by_user_id: null,
       signed_at: null,
+      customer_signed_by_name: null,
+      customer_signed_by_user_id: null,
+      customer_signed_at: null,
       linked_project_id: null,
       converted_at: null,
     }));
