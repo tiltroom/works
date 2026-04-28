@@ -1,11 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth";
 import { t } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n-server";
+import { notifyProjectDiscussionMessage } from "@/lib/notifications";
 import {
   parseProjectDiscussionMessageRecord,
   sanitizeRichTextHtml,
@@ -440,19 +442,32 @@ export async function addProjectDiscussionMessageAction(formData: FormData) {
   await assertProjectDiscussionAccess(profile.role, profile.id, projectId);
 
   const supabase = await createClient();
-  const { error } = await supabase.from("project_discussion_messages").insert({
+  const insertPayload = {
     project_id: projectId,
     author_id: profile.id,
     author_role: profile.role,
     message_html: payload.html,
     message_json: payload.json,
-  });
+  };
+  const insertResult = supabase.from("project_discussion_messages").insert(insertPayload);
+  const { data: insertedMessage, error } = typeof insertResult.select === "function"
+    ? await insertResult.select("id").maybeSingle<{ id: string }>()
+    : await insertResult;
 
   if (error) {
     throw new Error(error.message);
   }
 
   revalidateProjectsModule(projectId);
+
+  after(async () => {
+    await notifyProjectDiscussionMessage({
+      projectId,
+      authorName: profile.full_name,
+      messageHtml: payload.html,
+      dedupeKey: insertedMessage?.id ? `project-discussion:${insertedMessage.id}` : undefined,
+    });
+  });
 }
 
 export async function updateProjectDiscussionMessageAction(formData: FormData) {

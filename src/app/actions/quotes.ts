@@ -27,7 +27,7 @@ import {
   type QuoteWorkerRecord,
 } from "@/lib/quotes";
 import { getStripeClient } from "@/lib/stripe";
-import { notifyQuoteCreated, notifyQuoteConverted, notifyQuoteReverted } from "@/lib/notifications";
+import { notifyQuoteCreated, notifyQuoteConverted, notifyQuoteDiscussionMessage, notifyQuoteReverted } from "@/lib/notifications";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { AppRole } from "@/lib/types";
@@ -699,19 +699,32 @@ export async function addQuoteCommentAction(formData: FormData) {
   }
 
   const supabase = await assertQuotesBackend();
-  const { error } = await supabase.from("quote_comments").insert({
+  const insertPayload = {
     quote_id: quoteId,
     author_id: profile.id,
     author_role: profile.role,
     comment_html: payload.html,
     comment_json: payload.json,
-  });
+  };
+  const insertResult = supabase.from("quote_comments").insert(insertPayload);
+  const { data: insertedComment, error } = typeof insertResult.select === "function"
+    ? await insertResult.select("id").maybeSingle<{ id: string }>()
+    : await insertResult;
 
   if (error) {
     throw new Error(error.message);
   }
 
   revalidateQuotesModule(quoteId);
+
+  after(async () => {
+    await notifyQuoteDiscussionMessage({
+      quoteId,
+      authorName: profile.full_name,
+      messageHtml: payload.html,
+      dedupeKey: insertedComment?.id ? `quote-discussion:${insertedComment.id}` : undefined,
+    });
+  });
 }
 
 export async function addQuoteWorkerCommentAction(formData: FormData) {
