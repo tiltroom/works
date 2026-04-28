@@ -73,13 +73,19 @@ interface NotificationLogRow {
   updated_at?: string;
 }
 
+interface QuoteEventNotificationOptions {
+  dedupeKey?: string;
+  actorUserId?: string | null;
+  actorLocale?: string | null;
+}
+
 const PENDING_NOTIFICATION_RETRY_AFTER_MS = 5 * 60 * 1000;
 
 function normalizeLocale(locale: string | null | undefined): NotificationLocale {
   return locale === "it" ? "it" : "en";
 }
 
-function resolveDiscussionRecipientLocale(
+function resolveActorRecipientLocale(
   recipient: ResolvedRecipient,
   actorUserId: string | null | undefined,
   actorLocale: string | null | undefined,
@@ -87,6 +93,25 @@ function resolveDiscussionRecipientLocale(
   return actorUserId && recipient.userId === actorUserId
     ? normalizeLocale(actorLocale)
     : recipient.locale;
+}
+
+function normalizeQuoteEventNotificationOptions(
+  options: string | QuoteEventNotificationOptions | undefined,
+  fallbackDedupeKey: string,
+) {
+  if (typeof options === "string") {
+    return {
+      dedupeKey: options,
+      actorUserId: null,
+      actorLocale: null,
+    };
+  }
+
+  return {
+    dedupeKey: options?.dedupeKey ?? fallbackDedupeKey,
+    actorUserId: options?.actorUserId ?? null,
+    actorLocale: options?.actorLocale ?? null,
+  };
 }
 
 function normalizeEmail(email: string | null | undefined) {
@@ -718,6 +743,8 @@ async function notifyQuoteEvent(params: {
   includeCustomer: boolean;
   includeWorkers: boolean;
   dedupeKey: string;
+  actorUserId?: string | null;
+  actorLocale?: string | null;
   renderEmail: (recipient: ResolvedRecipient, context: QuoteNotificationContext) => { subject: string; html: string };
 }) {
   const [context, recipients] = await Promise.all([
@@ -727,17 +754,20 @@ async function notifyQuoteEvent(params: {
 
   const results = await Promise.allSettled(
     recipients.map(async (recipient) => {
-      const renderedEmail = params.renderEmail(recipient, context);
-        await sendNotificationToRecipient({
-          quoteId: params.quoteId,
-          eventType: params.eventType,
-          recipient,
-          subject: renderedEmail.subject,
-          html: renderedEmail.html,
-          dedupeKey: params.dedupeKey,
-        });
-      }),
-    );
+      const locale = resolveActorRecipientLocale(recipient, params.actorUserId, params.actorLocale);
+      const localizedRecipient = { ...recipient, locale };
+      const renderedEmail = params.renderEmail(localizedRecipient, context);
+
+      await sendNotificationToRecipient({
+        quoteId: params.quoteId,
+        eventType: params.eventType,
+        recipient: localizedRecipient,
+        subject: renderedEmail.subject,
+        html: renderedEmail.html,
+        dedupeKey: params.dedupeKey,
+      });
+    }),
+  );
 
   logSettledNotificationFailures(results, {
     quoteId: params.quoteId,
@@ -811,7 +841,7 @@ export async function notifyQuoteDiscussionMessage(params: {
 
     const results = await Promise.allSettled(
       recipients.map(async (recipient) => {
-        const locale = resolveDiscussionRecipientLocale(recipient, params.actorUserId, params.actorLocale);
+        const locale = resolveActorRecipientLocale(recipient, params.actorUserId, params.actorLocale);
         const localizedRecipient = { ...recipient, locale };
         const renderedEmail = renderQuoteDiscussionMessageEmail({
           locale,
@@ -866,7 +896,7 @@ export async function notifyProjectDiscussionMessage(params: {
 
     const results = await Promise.allSettled(
       recipients.map(async (recipient) => {
-        const locale = resolveDiscussionRecipientLocale(recipient, params.actorUserId, params.actorLocale);
+        const locale = resolveActorRecipientLocale(recipient, params.actorUserId, params.actorLocale);
         const localizedRecipient = { ...recipient, locale };
         const renderedEmail = renderProjectDiscussionMessageEmail({
           locale,
@@ -902,7 +932,12 @@ export async function notifyProjectDiscussionMessage(params: {
   }
 }
 
-export async function notifyQuoteConverted(quoteId: string, dedupeKey = `quote-converted:${quoteId}:${Date.now()}`) {
+export async function notifyQuoteConverted(
+  quoteId: string,
+  options?: string | QuoteEventNotificationOptions,
+) {
+  const notificationOptions = normalizeQuoteEventNotificationOptions(options, `quote-converted:${quoteId}:${Date.now()}`);
+
   try {
     await notifyQuoteEvent({
       quoteId,
@@ -910,7 +945,9 @@ export async function notifyQuoteConverted(quoteId: string, dedupeKey = `quote-c
       includeAdmins: true,
       includeCustomer: true,
       includeWorkers: true,
-      dedupeKey,
+      dedupeKey: notificationOptions.dedupeKey,
+      actorUserId: notificationOptions.actorUserId,
+      actorLocale: notificationOptions.actorLocale,
       renderEmail: (recipient, context) => renderQuoteConvertedEmail({
         locale: recipient.locale,
         quoteTitle: context.quoteTitle,
@@ -928,7 +965,12 @@ export async function notifyQuoteConverted(quoteId: string, dedupeKey = `quote-c
   }
 }
 
-export async function notifyQuoteReverted(quoteId: string, dedupeKey = `quote-reverted:${quoteId}:${Date.now()}`) {
+export async function notifyQuoteReverted(
+  quoteId: string,
+  options?: string | QuoteEventNotificationOptions,
+) {
+  const notificationOptions = normalizeQuoteEventNotificationOptions(options, `quote-reverted:${quoteId}:${Date.now()}`);
+
   try {
     await notifyQuoteEvent({
       quoteId,
@@ -936,7 +978,9 @@ export async function notifyQuoteReverted(quoteId: string, dedupeKey = `quote-re
       includeAdmins: true,
       includeCustomer: true,
       includeWorkers: true,
-      dedupeKey,
+      dedupeKey: notificationOptions.dedupeKey,
+      actorUserId: notificationOptions.actorUserId,
+      actorLocale: notificationOptions.actorLocale,
       renderEmail: (recipient, context) => renderQuoteRevertedEmail({
         locale: recipient.locale,
         quoteTitle: context.quoteTitle,

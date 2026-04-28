@@ -313,6 +313,31 @@ describe("quote notification dispatch", () => {
     expect(bodies.map((body) => body.recipientUserId).sort()).toEqual(["admin-1", "customer-1", "worker-1"]);
   });
 
+  it("notifyQuoteConverted uses the actor locale for the actor recipient", async () => {
+    mocks.profiles = [
+      { id: "customer-1", role: "customer", locale: "en", full_name: "Customer One" },
+    ];
+    mocks.quote = { id: "quote-1", title: "Test Quote", customer_id: "customer-1" };
+    mocks.quoteWorkers = [];
+
+    const { notifyQuoteConverted } = await import("@/lib/notifications");
+
+    await notifyQuoteConverted("quote-1", {
+      actorUserId: "customer-1",
+      actorLocale: "it",
+      dedupeKey: "quote-converted:it",
+    });
+
+    const bodies = mocks.fetch.mock.calls.map(([, options]) => JSON.parse(options.body as string));
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).toMatchObject({
+      recipientUserId: "customer-1",
+      locale: "it",
+      subject: "Preventivo Convertito: Test Quote",
+    });
+    expect(bodies[0]!.html).toContain("Preventivo Convertito in Progetto");
+  });
+
   it("notifyQuoteReverted posts expected reverted payloads", async () => {
     const { notifyQuoteReverted } = await import("@/lib/notifications");
 
@@ -326,6 +351,31 @@ describe("quote notification dispatch", () => {
       "Preventivo riportato in bozza: Test Quote",
       "Quote reverted to draft: Test Quote",
     ]);
+  });
+
+  it("notifyQuoteReverted uses the actor locale for the actor recipient", async () => {
+    mocks.profiles = [
+      { id: "admin-1", role: "admin", locale: "en", full_name: "Admin One" },
+    ];
+    mocks.quote = { id: "quote-1", title: "Test Quote", customer_id: "admin-1" };
+    mocks.quoteWorkers = [];
+
+    const { notifyQuoteReverted } = await import("@/lib/notifications");
+
+    await notifyQuoteReverted("quote-1", {
+      actorUserId: "admin-1",
+      actorLocale: "it",
+      dedupeKey: "quote-reverted:it",
+    });
+
+    const bodies = mocks.fetch.mock.calls.map(([, options]) => JSON.parse(options.body as string));
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).toMatchObject({
+      recipientUserId: "admin-1",
+      locale: "it",
+      subject: "Preventivo riportato in bozza: Test Quote",
+    });
+    expect(bodies[0]!.html).toContain("Preventivo riportato in bozza");
   });
 
   it("notifyQuoteDiscussionMessage posts payloads for every related quote user", async () => {
