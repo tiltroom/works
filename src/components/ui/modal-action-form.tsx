@@ -45,6 +45,7 @@ export function ModalActionForm({
       try {
         await action(formData);
         router.replace(withQueryToast(successRedirectHref, "success", successMessage), { scroll: false });
+        router.refresh();
       } catch (error: unknown) {
         setErrorMessage(getErrorMessage(error, genericErrorMessage));
       }
