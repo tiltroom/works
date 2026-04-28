@@ -347,6 +347,34 @@ describe("quote notification dispatch", () => {
     expect(bodies[0]!.html).toContain("Hello related quote users");
   });
 
+  it("notifyQuoteDiscussionMessage uses the actor locale for the actor recipient", async () => {
+    mocks.profiles = [
+      { id: "admin-1", role: "admin", locale: "en", full_name: "Admin One" },
+    ];
+    mocks.quote = { id: "quote-1", title: "Test Quote", customer_id: "admin-1" };
+    mocks.quoteWorkers = [];
+
+    const { notifyQuoteDiscussionMessage } = await import("@/lib/notifications");
+
+    await notifyQuoteDiscussionMessage({
+      quoteId: "quote-1",
+      actorUserId: "admin-1",
+      actorLocale: "it",
+      authorName: "Admin One",
+      messageHtml: "<p>Ciao</p>",
+      dedupeKey: "quote-discussion:comment-it",
+    });
+
+    const bodies = mocks.fetch.mock.calls.map(([, options]) => JSON.parse(options.body as string));
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).toMatchObject({
+      recipientUserId: "admin-1",
+      locale: "it",
+      subject: "Nuovo messaggio nella discussione: Test Quote",
+    });
+    expect(bodies[0]!.html).toContain("Nuovo Messaggio nella Discussione del Preventivo");
+  });
+
   it("notifyProjectDiscussionMessage posts payloads for every related project user", async () => {
     const { notifyProjectDiscussionMessage } = await import("@/lib/notifications");
 
@@ -364,6 +392,34 @@ describe("quote notification dispatch", () => {
     expect(bodies.every((body) => body.projectId === "project-1")).toBe(true);
     expect(bodies.every((body) => body.quoteId === undefined)).toBe(true);
     expect(bodies[0]!.html).toContain("Project discussion update");
+  });
+
+  it("notifyProjectDiscussionMessage uses the actor locale for the actor recipient", async () => {
+    mocks.profiles = [
+      { id: "customer-1", role: "customer", locale: "en", full_name: "Customer One" },
+    ];
+    mocks.project = { id: "project-1", name: "Test Project", customer_id: "customer-1" };
+    mocks.projectWorkers = [];
+
+    const { notifyProjectDiscussionMessage } = await import("@/lib/notifications");
+
+    await notifyProjectDiscussionMessage({
+      projectId: "project-1",
+      actorUserId: "customer-1",
+      actorLocale: "it",
+      authorName: "Customer One",
+      messageHtml: "<p>Aggiornamento</p>",
+      dedupeKey: "project-discussion:message-it",
+    });
+
+    const bodies = mocks.fetch.mock.calls.map(([, options]) => JSON.parse(options.body as string));
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).toMatchObject({
+      recipientUserId: "customer-1",
+      locale: "it",
+      subject: "Nuovo messaggio nel progetto: Test Project",
+    });
+    expect(bodies[0]!.html).toContain("Nuovo Messaggio nella Discussione del Progetto");
   });
 });
 

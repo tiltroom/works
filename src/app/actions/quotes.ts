@@ -720,6 +720,8 @@ export async function addQuoteCommentAction(formData: FormData) {
   after(async () => {
     await notifyQuoteDiscussionMessage({
       quoteId,
+      actorUserId: profile.id,
+      actorLocale: locale,
       authorName: profile.full_name,
       messageHtml: payload.html,
       dedupeKey: insertedComment?.id ? `quote-discussion:${insertedComment.id}` : undefined,

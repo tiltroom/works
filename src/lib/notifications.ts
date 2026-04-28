@@ -79,6 +79,16 @@ function normalizeLocale(locale: string | null | undefined): NotificationLocale 
   return locale === "it" ? "it" : "en";
 }
 
+function resolveDiscussionRecipientLocale(
+  recipient: ResolvedRecipient,
+  actorUserId: string | null | undefined,
+  actorLocale: string | null | undefined,
+) {
+  return actorUserId && recipient.userId === actorUserId
+    ? normalizeLocale(actorLocale)
+    : recipient.locale;
+}
+
 function normalizeEmail(email: string | null | undefined) {
   return email?.trim().toLowerCase() ?? "";
 }
@@ -779,6 +789,8 @@ export async function notifyQuoteCreated(quoteId: string, customerId: string) {
 
 export async function notifyQuoteDiscussionMessage(params: {
   quoteId: string;
+  actorUserId?: string | null;
+  actorLocale?: string | null;
   authorName?: string | null;
   messageHtml?: string | null;
   dedupeKey?: string;
@@ -794,8 +806,10 @@ export async function notifyQuoteDiscussionMessage(params: {
 
     const results = await Promise.allSettled(
       recipients.map(async (recipient) => {
+        const locale = resolveDiscussionRecipientLocale(recipient, params.actorUserId, params.actorLocale);
+        const localizedRecipient = { ...recipient, locale };
         const renderedEmail = renderQuoteDiscussionMessageEmail({
-          locale: recipient.locale,
+          locale,
           quoteTitle: context.quoteTitle,
           quoteId: context.quoteId,
           customerName: context.customerName,
@@ -808,7 +822,7 @@ export async function notifyQuoteDiscussionMessage(params: {
         await sendNotificationToRecipient({
           quoteId: context.quoteId,
           eventType: "quote_discussion_message",
-          recipient,
+          recipient: localizedRecipient,
           subject: renderedEmail.subject,
           html: renderedEmail.html,
           dedupeKey,
@@ -830,6 +844,8 @@ export async function notifyQuoteDiscussionMessage(params: {
 
 export async function notifyProjectDiscussionMessage(params: {
   projectId: string;
+  actorUserId?: string | null;
+  actorLocale?: string | null;
   authorName?: string | null;
   messageHtml?: string | null;
   dedupeKey?: string;
@@ -845,8 +861,10 @@ export async function notifyProjectDiscussionMessage(params: {
 
     const results = await Promise.allSettled(
       recipients.map(async (recipient) => {
+        const locale = resolveDiscussionRecipientLocale(recipient, params.actorUserId, params.actorLocale);
+        const localizedRecipient = { ...recipient, locale };
         const renderedEmail = renderProjectDiscussionMessageEmail({
-          locale: recipient.locale,
+          locale,
           projectTitle: context.projectTitle,
           projectId: context.projectId,
           customerName: context.customerName,
@@ -859,7 +877,7 @@ export async function notifyProjectDiscussionMessage(params: {
         await sendNotificationToRecipient({
           projectId: context.projectId,
           eventType: "project_discussion_message",
-          recipient,
+          recipient: localizedRecipient,
           subject: renderedEmail.subject,
           html: renderedEmail.html,
           dedupeKey,

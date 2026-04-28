@@ -463,6 +463,8 @@ export async function addProjectDiscussionMessageAction(formData: FormData) {
   after(async () => {
     await notifyProjectDiscussionMessage({
       projectId,
+      actorUserId: profile.id,
+      actorLocale: locale,
       authorName: profile.full_name,
       messageHtml: payload.html,
       dedupeKey: insertedMessage?.id ? `project-discussion:${insertedMessage.id}` : undefined,
