@@ -45,6 +45,23 @@ interface QuotesPageData {
 
 type RawRow = Record<string, unknown>;
 
+type QuoteSignatureUpdate = {
+  customer_signed_by_name: string;
+  customer_signed_by_user_id: string;
+  customer_signed_at: string;
+  updated_at: string;
+};
+
+type QuoteSignatureClient = {
+  from(table: "quotes"): {
+    update(values: QuoteSignatureUpdate): {
+      eq(column: string, value: string): {
+        is(column: string, value: null): unknown;
+      };
+    };
+  };
+};
+
 interface DiscussionPayload {
   html: string | null;
   json: Record<string, unknown> | null;
@@ -66,6 +83,30 @@ function revalidateQuotesModule(quoteId?: string) {
 
 function trimString(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
+}
+
+async function signQuoteAsCustomer(
+  client: QuoteSignatureClient,
+  quoteId: string,
+  customerId: string,
+  signatureName: string,
+) {
+  const signatureTimestamp = new Date().toISOString();
+  const result = await client
+    .from("quotes")
+    .update({
+      customer_signed_by_name: signatureName,
+      customer_signed_by_user_id: customerId,
+      customer_signed_at: signatureTimestamp,
+      updated_at: signatureTimestamp,
+    })
+    .eq("id", quoteId)
+    .is("customer_signed_at", null);
+  const { error } = result as { error: { message: string } | null };
+
+  if (error) {
+    throw new Error(error.message);
+  }
 }
 
 function parseDiscussionPayload(
@@ -1372,21 +1413,7 @@ export async function createCheckoutForQuotePrepaymentAction(formData: FormData)
   }
 
   if (!existing.customerSignedAt && !existing.customerSignedByUserId) {
-    const signatureTimestamp = new Date().toISOString();
-    const { error: signatureError } = await supabase
-      .from("quotes")
-      .update({
-        customer_signed_by_name: signatureName,
-        customer_signed_by_user_id: profile.id,
-        customer_signed_at: signatureTimestamp,
-        updated_at: signatureTimestamp,
-      })
-      .eq("id", quoteId)
-      .is("customer_signed_at", null);
-
-    if (signatureError) {
-      throw new Error(signatureError.message);
-    }
+    await signQuoteAsCustomer(supabase, quoteId, profile.id, signatureName);
   }
 
   const { error } = await supabase.from("quote_prepayment_sessions").insert({
@@ -1442,24 +1469,9 @@ export async function startQuoteConversionCheckoutAction(formData: FormData) {
       throw new Error(t(locale, "Quote already signed by customer", "Preventivo già firmato dal cliente"));
     }
 
-    const now = new Date().toISOString();
-    const supabase = await assertQuotesBackend();
-    const { error: signatureError } = await supabase
-      .from("quotes")
-      .update({
-        customer_signed_by_name: signatureName,
-        customer_signed_by_user_id: profile.id,
-        customer_signed_at: now,
-        updated_at: now,
-      })
-      .eq("id", quoteId)
-      .is("customer_signed_at", null);
-
-    if (signatureError) {
-      throw new Error(signatureError.message);
-    }
-
     const admin = createAdminClient();
+    await signQuoteAsCustomer(admin, quoteId, profile.id, signatureName);
+
     const { error } = await admin.rpc("apply_postpaid_quote_conversion", {
       p_quote_id: quoteId,
       p_admin_comment: null,
@@ -1481,7 +1493,7 @@ export async function startQuoteConversionCheckoutAction(formData: FormData) {
     after(async () => {
       await notifyQuoteConverted(quoteId);
     });
-    redirect(
+    return redirect(
       withQueryToast(
         `/customer/quotes/${quoteId}`,
         "success",

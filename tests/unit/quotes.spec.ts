@@ -15,6 +15,11 @@ const mockRequireRole = vi.fn();
 const mockGetLocale = vi.fn();
 const mockRevalidatePath = vi.fn();
 const mockCreateClient = vi.fn();
+const mockCreateAdminClient = vi.fn();
+const mockNotifyQuoteCreated = vi.fn();
+const mockNotifyQuoteConverted = vi.fn();
+const mockNotifyQuoteDiscussionMessage = vi.fn();
+const mockNotifyQuoteReverted = vi.fn();
 
 vi.mock("next/cache", () => ({
   revalidatePath: mockRevalidatePath,
@@ -46,6 +51,17 @@ vi.mock("@/lib/i18n", () => ({
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: mockCreateClient,
+}));
+
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: mockCreateAdminClient,
+}));
+
+vi.mock("@/lib/notifications", () => ({
+  notifyQuoteCreated: mockNotifyQuoteCreated,
+  notifyQuoteConverted: mockNotifyQuoteConverted,
+  notifyQuoteDiscussionMessage: mockNotifyQuoteDiscussionMessage,
+  notifyQuoteReverted: mockNotifyQuoteReverted,
 }));
 
 vi.mock("@/lib/i18n-server", () => ({
@@ -213,6 +229,78 @@ function createMockSupabaseForRevertQuote(options?: {
   };
 
   return { client, update };
+}
+
+function createMockSupabaseForCustomerPostpaidConversion(options?: {
+  signatureError?: { message: string } | null;
+  rpcError?: { message: string } | null;
+}) {
+  const filters = new Map<string, unknown>();
+  const update = vi.fn().mockReturnValue({
+    eq: vi.fn().mockReturnValue({
+      is: vi.fn().mockResolvedValue({ error: options?.signatureError ?? null }),
+    }),
+  });
+  const rpc = vi.fn().mockResolvedValue({ error: options?.rpcError ?? null });
+  const quoteData = {
+    id: "quote-postpaid-001",
+    title: "Post-paid quote",
+    status: "signed",
+    billing_mode: "postpaid",
+    customer_id: "customer-1",
+    total_estimated_hours: 0,
+    total_logged_hours: 0,
+    signed_by_name: "Admin User",
+    signed_at: "2026-04-08T09:10:00.000Z",
+    signed_by_user_id: "admin-1",
+    customer_signed_by_name: null,
+    customer_signed_at: null,
+    customer_signed_by_user_id: null,
+    linked_project_id: null,
+    converted_at: null,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+  };
+
+  const browserClient = {
+    from(table: string) {
+      if (table !== "quotes") {
+        throw new Error(`Unexpected browser table ${table}`);
+      }
+
+      return {
+        select(_columns: string, selectOptions?: { head?: boolean }) {
+          if (selectOptions?.head) {
+            return Promise.resolve({ data: null, error: null, count: 1 });
+          }
+
+          return {
+            eq(column: string, value: unknown) {
+              filters.set(column, value);
+              return this;
+            },
+            maybeSingle: vi.fn().mockImplementation(async () => ({
+              data: { ...quoteData, id: String(filters.get("id") ?? quoteData.id) },
+              error: null,
+            })),
+          };
+        },
+      };
+    },
+  };
+
+  const adminClient = {
+    from(table: string) {
+      if (table !== "quotes") {
+        throw new Error(`Unexpected admin table ${table}`);
+      }
+
+      return { update };
+    },
+    rpc,
+  };
+
+  return { browserClient, adminClient, update, rpc };
 }
 
 beforeEach(() => {
@@ -816,7 +904,7 @@ describe("quotes helpers", () => {
     );
 
     expect(migrationSql).toContain("new_project_id := quote_row.linked_project_id;");
-    expect(migrationSql).toMatch(/if new_project_id is null then\s+insert into public\.projects/s);
+    expect(migrationSql).toMatch(/if new_project_id is null then\s+insert into public\.projects/);
     expect(migrationSql).toMatch(/else\s+update public\.projects p\s+set name = quote_row\.title,[\s\S]*billing_mode = 'postpaid'/);
   });
 
@@ -841,6 +929,43 @@ describe("quotes helpers", () => {
     expect(migrationSql).toContain("quote_not_customer_signed");
     expect(migrationSql).toMatch(/convert_quote_to_project_core[\s\S]*customer_signed_at is null/);
     expect(migrationSql).toMatch(/apply_postpaid_quote_conversion[\s\S]*customer_signed_at is null/);
+  });
+
+  it("allows a signed quote to carry the customer's second signature before conversion", () => {
+    const migrationSql = readFileSync(
+      join(process.cwd(), "supabase", "2026-04-17-allow-customer-signature-on-admin-signed-quotes.sql"),
+      "utf8",
+    );
+
+    const signedStateBlock = migrationSql.match(/status = 'signed'[\s\S]*?status = 'converted'/)?.[0];
+    expect(signedStateBlock).toBeDefined();
+    expect(signedStateBlock).toMatch(/customer_signed_by_name is null[\s\S]*customer_signed_at is null[\s\S]*customer_signed_by_user_id is null/);
+    expect(signedStateBlock).toMatch(/nullif\(btrim\(coalesce\(customer_signed_by_name, ''\)\), ''\) is not null[\s\S]*customer_signed_at is not null[\s\S]*customer_signed_by_user_id is not null/);
+  });
+
+  it("uses the admin client to customer-sign postpaid quotes before RPC conversion", async () => {
+    vi.resetModules();
+    mockGetLocale.mockResolvedValue("en");
+    mockRequireRole.mockResolvedValue({ id: "customer-1", role: "customer", full_name: "Customer User" });
+    const { browserClient, adminClient, update, rpc } = createMockSupabaseForCustomerPostpaidConversion();
+    mockCreateClient.mockResolvedValue(browserClient);
+    mockCreateAdminClient.mockReturnValue(adminClient);
+
+    const { startQuoteConversionCheckoutAction } = await import("@/app/actions/quotes");
+    const formData = new FormData();
+    formData.set("quoteId", "quote-postpaid-001");
+
+    await startQuoteConversionCheckoutAction(formData);
+
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({
+      customer_signed_by_name: "Customer User",
+      customer_signed_by_user_id: "customer-1",
+      customer_signed_at: expect.any(String),
+    }));
+    expect(rpc).toHaveBeenCalledWith("apply_postpaid_quote_conversion", {
+      p_quote_id: "quote-postpaid-001",
+      p_admin_comment: null,
+    });
   });
 
   it("admin sign modal asks for prepaid or post-paid billing mode", () => {
