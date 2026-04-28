@@ -159,7 +159,7 @@ export default async function AdminQuoteViewPage({
           action={(
             <div className="flex flex-wrap items-center gap-2">
               {canAssignWorkers ? <Link href={`${detailHref}?assignWorkersId=${quote.id}`} className={quotesSecondaryButtonClass}>{t(locale, "Assign workers", "Assegna operatori")}</Link> : null}
-              {canSign ? <Link href={`${detailHref}?signQuoteId=${quote.id}`} className={quotesPrimaryButtonClass}>{t(locale, "Sign", "Firma")}</Link> : null}
+              {canSign ? <Link href={`${detailHref}?signQuoteId=${quote.id}`} className={quotesPrimaryButtonClass}>{t(locale, "Send for signature", "Manda in firma")}</Link> : null}
               {canRevertToDraft ? <Link href={`${detailHref}?revertQuoteId=${quote.id}`} className={quotesSecondaryButtonClass}>{t(locale, "Back to draft", "Torna in bozza")}</Link> : null}
               {canSwitchToPostpaid ? <Link href={`${detailHref}?switchToPostpaidQuoteId=${quote.id}`} className={quotesSecondaryButtonClass}>{t(locale, "Switch to post-paid", "Converti in post-pagato")}</Link> : null}
               {canMarkAsPaid ? <Link href={`${detailHref}?markPaidQuoteId=${quote.id}`} className={quotesPrimaryButtonClass}>{quote.billingMode === "postpaid" ? t(locale, "Convert (post-paid)", "Converti (post-pagato)") : t(locale, "Mark as (pre)paid", "Segna come (pre) pagato")}</Link> : null}
@@ -535,15 +535,15 @@ export default async function AdminQuoteViewPage({
 
       {activeSignQuote ? (
         <QuoteActionModal
-          title={t(locale, "Sign quote", "Firma preventivo")}
+          title={t(locale, "Send quote for signature", "Manda in firma")}
           closeHref={detailHref}
           successRedirectHref={detailHref}
           action={signQuoteAction}
           closeLabel={t(locale, "Close", "Chiudi")}
           cancelLabel={t(locale, "Cancel", "Annulla")}
-          submitLabel={t(locale, "Apply signature", "Applica firma")}
-          submittingLabel={t(locale, "Applying…", "Applicazione in corso…")}
-          successMessage={t(locale, "Quote signed", "Preventivo firmato")}
+          submitLabel={t(locale, "Send for signature", "Manda in firma")}
+          submittingLabel={t(locale, "Sending…", "Invio in corso…")}
+          successMessage={t(locale, "Quote sent for signature", "Preventivo mandato in firma")}
           genericErrorMessage={t(locale, "Unable to sign quote", "Impossibile firmare il preventivo")}
         >
           <input type="hidden" name="quoteId" value={activeSignQuote.id} />

@@ -849,6 +849,10 @@ describe("quotes helpers", () => {
       "utf8",
     );
 
+    expect(pageContent).toContain('t(locale, "Send for signature", "Manda in firma")');
+    expect(pageContent).toContain('title={t(locale, "Send quote for signature", "Manda in firma")}');
+    expect(pageContent).toContain('submittingLabel={t(locale, "Sending…", "Invio in corso…")}');
+    expect(pageContent).toContain('successMessage={t(locale, "Quote sent for signature", "Preventivo mandato in firma")}');
     expect(pageContent).toContain('name="billingMode" value="prepaid"');
     expect(pageContent).toContain('name="billingMode" value="postpaid"');
     expect(pageContent).toContain('const canSwitchToPostpaid = false;');
