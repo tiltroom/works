@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  renderProjectDiscussionMessageEmail,
   renderQuoteCreatedEmail,
   renderQuoteConvertedEmail,
+  renderQuoteDiscussionMessageEmail,
   renderQuoteRevertedEmail,
 } from "@/lib/email-templates";
 
@@ -9,6 +11,8 @@ const APP_URL = "https://app.example.com";
 const QUOTE_ID = "quote-123";
 const QUOTE_TITLE = "Kitchen Renovation";
 const CUSTOMER_NAME = "Mario Rossi";
+const PROJECT_ID = "project-123";
+const PROJECT_TITLE = "Kitchen Installation";
 
 describe("renderQuoteCreatedEmail", () => {
   it("renders subject and html in English", () => {
@@ -155,7 +159,7 @@ describe("renderQuoteConvertedEmail", () => {
 });
 
 describe("renderQuoteRevertedEmail", () => {
-  it("renders Italian subject and html even when locale is English", () => {
+  it("renders subject and html in English", () => {
     const result = renderQuoteRevertedEmail({
       locale: "en",
       quoteTitle: QUOTE_TITLE,
@@ -164,12 +168,11 @@ describe("renderQuoteRevertedEmail", () => {
       appUrl: APP_URL,
     });
 
-    expect(result.subject).toBe("Preventivo riportato in bozza: Kitchen Renovation");
-    expect(result.html).toContain('html lang="it"');
-    expect(result.html).toContain("Preventivo riportato in bozza");
-    expect(result.html).toContain("Stato attuale · Bozza");
+    expect(result.subject).toBe("Quote reverted to draft: Kitchen Renovation");
+    expect(result.html).toContain('html lang="en"');
+    expect(result.html).toContain("Quote reverted to draft");
+    expect(result.html).toContain("Current status · Draft");
     expect(result.html).toContain("Mario Rossi");
-    expect(result.html).not.toContain("Quote Reverted to Draft");
   });
 
   it("renders subject and html in Italian", () => {
@@ -209,7 +212,7 @@ describe("renderQuoteRevertedEmail", () => {
     });
 
     expect(result.html).toContain(`/customer/quotes/${QUOTE_ID}`);
-    expect(result.html).toContain("associato al tuo account");
+    expect(result.html).toContain("associated with your account");
   });
 
   it("uses worker link when recipientRole is 'worker'", () => {
@@ -223,6 +226,45 @@ describe("renderQuoteRevertedEmail", () => {
     });
 
     expect(result.html).toContain(`/worker/quotes/${QUOTE_ID}`);
-    expect(result.html).toContain("registrazione delle ore è temporaneamente sospesa");
+    expect(result.html).toContain("Hour logging is temporarily suspended");
+  });
+});
+
+describe("discussion message email templates", () => {
+  it("renders quote discussion email with a role-specific quote link and escaped preview", () => {
+    const result = renderQuoteDiscussionMessageEmail({
+      locale: "en",
+      quoteTitle: QUOTE_TITLE,
+      quoteId: QUOTE_ID,
+      customerName: CUSTOMER_NAME,
+      authorName: "Worker <One>",
+      messagePreview: "Please review <scope> & timing",
+      appUrl: APP_URL,
+      recipientRole: "worker",
+    });
+
+    expect(result.subject).toBe("New discussion message: Kitchen Renovation");
+    expect(result.html).toContain("New Quote Discussion Message");
+    expect(result.html).toContain("Worker &lt;One&gt;");
+    expect(result.html).toContain("Please review &lt;scope&gt; &amp; timing");
+    expect(result.html).toContain(`/worker/quotes/${QUOTE_ID}`);
+  });
+
+  it("renders project discussion email with a role-specific project link", () => {
+    const result = renderProjectDiscussionMessageEmail({
+      locale: "it",
+      projectTitle: PROJECT_TITLE,
+      projectId: PROJECT_ID,
+      customerName: CUSTOMER_NAME,
+      authorName: "Mario Rossi",
+      messagePreview: "Aggiornamento progetto",
+      appUrl: APP_URL,
+      recipientRole: "customer",
+    });
+
+    expect(result.subject).toBe("Nuovo messaggio nel progetto: Kitchen Installation");
+    expect(result.html).toContain("Nuovo Messaggio nella Discussione del Progetto");
+    expect(result.html).toContain("Aggiornamento progetto");
+    expect(result.html).toContain(`/customer/projects/${PROJECT_ID}`);
   });
 });

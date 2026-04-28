@@ -1,4 +1,9 @@
-export type EmailEventType = "quote_created" | "quote_converted" | "quote_reverted";
+export type EmailEventType =
+  | "quote_created"
+  | "quote_converted"
+  | "quote_reverted"
+  | "quote_discussion_message"
+  | "project_discussion_message";
 
 type RecipientRole = "admin" | "customer" | "worker";
 
@@ -22,6 +27,23 @@ interface ConvertedParams extends CreatedParams {
 }
 
 interface RevertedParams extends CreatedParams {
+  recipientRole?: RecipientRole;
+}
+
+interface QuoteDiscussionParams extends CreatedParams {
+  authorName: string;
+  messagePreview?: string | null;
+  recipientRole?: RecipientRole;
+}
+
+interface ProjectDiscussionParams {
+  locale: string;
+  projectTitle: string;
+  projectId: string;
+  customerName: string;
+  authorName: string;
+  messagePreview?: string | null;
+  appUrl: string;
   recipientRole?: RecipientRole;
 }
 
@@ -69,6 +91,17 @@ function buildLink(appUrl: string, quoteId: string, role?: RecipientRole): strin
   const base = appUrl.replace(/\/+$/, "");
   const segment = role ?? "admin";
   return `${base}/${segment}/quotes/${quoteId}`;
+}
+
+function buildProjectLink(appUrl: string, projectId: string, role?: RecipientRole): string {
+  const base = appUrl.replace(/\/+$/, "");
+  const segment = role ?? "admin";
+  return `${base}/${segment}/projects/${projectId}`;
+}
+
+function normalizePreview(value: string | null | undefined) {
+  const preview = value?.replace(/\s+/g, " ").trim() ?? "";
+  return preview.length > 240 ? `${preview.slice(0, 237)}...` : preview;
 }
 
 function buildEmailHtml(
@@ -162,40 +195,114 @@ export function renderQuoteConvertedEmail(params: ConvertedParams): RenderedEmai
   };
 }
 
+export function renderQuoteDiscussionMessageEmail(params: QuoteDiscussionParams): RenderedEmail {
+  const locale = normalizeLocale(params.locale);
+  const quoteTitle = params.quoteTitle || "Untitled quote";
+  const customerDisplay = params.customerName || "—";
+  const authorDisplay = params.authorName || "—";
+  const messagePreview = normalizePreview(params.messagePreview);
+  const link = buildLink(params.appUrl, params.quoteId, params.recipientRole);
+
+  const subject = t(locale, `New discussion message: ${quoteTitle}`, `Nuovo messaggio nella discussione: ${quoteTitle}`);
+  const headerText = t(locale, "New Quote Discussion Message", "Nuovo Messaggio nella Discussione del Preventivo");
+  const ctaLabel = t(locale, "Open Discussion", "Apri Discussione");
+  const footerNote = t(
+    locale,
+    "You received this email because you are associated with this quote discussion.",
+    "Hai ricevuto questa email perché sei associato a questa discussione del preventivo.",
+  );
+
+  const bodyRows = [
+    `<p style="${STYLES.paragraph}">${t(locale, `${escapeHtml(authorDisplay)} wrote a new message in the quote discussion for ${escapeHtml(quoteTitle)}.`, `${escapeHtml(authorDisplay)} ha scritto un nuovo messaggio nella discussione del preventivo ${escapeHtml(quoteTitle)}.`)}</p>`,
+    `<div style="${STYLES.detailCard}">
+          <p style="${STYLES.detailRow}"><span style="${STYLES.detailLabel}">${t(locale, "Quote", "Preventivo")}</span><span style="${STYLES.detailValue}">${escapeHtml(quoteTitle)}</span></p>
+          <p style="${messagePreview ? STYLES.detailRow : STYLES.detailRowLast}"><span style="${STYLES.detailLabel}">${t(locale, "Customer", "Cliente")}</span><span style="${STYLES.detailValue}">${escapeHtml(customerDisplay)}</span></p>
+          ${messagePreview ? `<p style="${STYLES.detailRowLast}"><span style="${STYLES.detailLabel}">${t(locale, "Message preview", "Anteprima messaggio")}</span><span style="${STYLES.detailValue}">${escapeHtml(messagePreview)}</span></p>` : ""}
+        </div>`,
+  ];
+
+  return {
+    subject,
+    html: buildEmailHtml(locale, headerText, bodyRows, link, ctaLabel, footerNote, {
+      eyebrow: "Hours Platform",
+      headerSubtitle: t(locale, "A new message is waiting in the shared quote thread.", "Un nuovo messaggio ti aspetta nel thread condiviso del preventivo."),
+    }),
+  };
+}
+
+export function renderProjectDiscussionMessageEmail(params: ProjectDiscussionParams): RenderedEmail {
+  const locale = normalizeLocale(params.locale);
+  const projectTitle = params.projectTitle || "Untitled project";
+  const customerDisplay = params.customerName || "—";
+  const authorDisplay = params.authorName || "—";
+  const messagePreview = normalizePreview(params.messagePreview);
+  const link = buildProjectLink(params.appUrl, params.projectId, params.recipientRole);
+
+  const subject = t(locale, `New project message: ${projectTitle}`, `Nuovo messaggio nel progetto: ${projectTitle}`);
+  const headerText = t(locale, "New Project Discussion Message", "Nuovo Messaggio nella Discussione del Progetto");
+  const ctaLabel = t(locale, "Open Project Discussion", "Apri Discussione Progetto");
+  const footerNote = t(
+    locale,
+    "You received this email because you are associated with this project discussion.",
+    "Hai ricevuto questa email perché sei associato a questa discussione del progetto.",
+  );
+
+  const bodyRows = [
+    `<p style="${STYLES.paragraph}">${t(locale, `${escapeHtml(authorDisplay)} wrote a new message in the project discussion for ${escapeHtml(projectTitle)}.`, `${escapeHtml(authorDisplay)} ha scritto un nuovo messaggio nella discussione del progetto ${escapeHtml(projectTitle)}.`)}</p>`,
+    `<div style="${STYLES.detailCard}">
+          <p style="${STYLES.detailRow}"><span style="${STYLES.detailLabel}">${t(locale, "Project", "Progetto")}</span><span style="${STYLES.detailValue}">${escapeHtml(projectTitle)}</span></p>
+          <p style="${messagePreview ? STYLES.detailRow : STYLES.detailRowLast}"><span style="${STYLES.detailLabel}">${t(locale, "Customer", "Cliente")}</span><span style="${STYLES.detailValue}">${escapeHtml(customerDisplay)}</span></p>
+          ${messagePreview ? `<p style="${STYLES.detailRowLast}"><span style="${STYLES.detailLabel}">${t(locale, "Message preview", "Anteprima messaggio")}</span><span style="${STYLES.detailValue}">${escapeHtml(messagePreview)}</span></p>` : ""}
+        </div>`,
+  ];
+
+  return {
+    subject,
+    html: buildEmailHtml(locale, headerText, bodyRows, link, ctaLabel, footerNote, {
+      eyebrow: "Hours Platform",
+      headerSubtitle: t(locale, "A new message is waiting in the shared project thread.", "Un nuovo messaggio ti aspetta nel thread condiviso del progetto."),
+    }),
+  };
+}
+
 export function renderQuoteRevertedEmail(params: RevertedParams): RenderedEmail {
-  const locale: Locale = "it";
-  const quoteTitle = params.quoteTitle || "Preventivo senza titolo";
+  const locale = normalizeLocale(params.locale);
+  const quoteTitle = params.quoteTitle || t(locale, "Untitled quote", "Preventivo senza titolo");
   const customerDisplay = params.customerName || "—";
   const link = buildLink(params.appUrl, params.quoteId, params.recipientRole);
   const escapedQuoteTitle = escapeHtml(quoteTitle);
   const escapedCustomerDisplay = escapeHtml(customerDisplay);
 
-  const subject = `Preventivo riportato in bozza: ${quoteTitle}`;
-  const headerText = "Preventivo riportato in bozza";
-  const ctaLabel = "Apri preventivo";
-  const footerNote = "Hai ricevuto questa email perché sei associato a questo preventivo.";
+  const subject = t(locale, `Quote reverted to draft: ${quoteTitle}`, `Preventivo riportato in bozza: ${quoteTitle}`);
+  const headerText = t(locale, "Quote reverted to draft", "Preventivo riportato in bozza");
+  const ctaLabel = t(locale, "Open quote", "Apri preventivo");
+  const footerNote = t(
+    locale,
+    "You received this email because you are associated with this quote.",
+    "Hai ricevuto questa email perché sei associato a questo preventivo.",
+  );
 
   const roleIntro = params.recipientRole === "customer"
-    ? `Il preventivo associato al tuo account è stato riportato in bozza: <strong>${escapedQuoteTitle}</strong>.`
+    ? t(locale, `The quote associated with your account has been reverted to draft: <strong>${escapedQuoteTitle}</strong>.`, `Il preventivo associato al tuo account è stato riportato in bozza: <strong>${escapedQuoteTitle}</strong>.`)
     : params.recipientRole === "worker"
-      ? `Il preventivo assegnato a te è stato riportato in bozza: <strong>${escapedQuoteTitle}</strong>. La registrazione delle ore è temporaneamente sospesa.`
-      : `Il preventivo <strong>${escapedQuoteTitle}</strong> è stato riportato in bozza.`;
+      ? t(locale, `The quote assigned to you has been reverted to draft: <strong>${escapedQuoteTitle}</strong>. Hour logging is temporarily suspended.`, `Il preventivo assegnato a te è stato riportato in bozza: <strong>${escapedQuoteTitle}</strong>. La registrazione delle ore è temporaneamente sospesa.`)
+      : t(locale, `Quote <strong>${escapedQuoteTitle}</strong> has been reverted to draft.`, `Il preventivo <strong>${escapedQuoteTitle}</strong> è stato riportato in bozza.`);
 
   const nextStep = params.recipientRole === "customer"
-    ? "Rivedi la bozza dalla piattaforma e attendi il nuovo invio in firma quando gli aggiornamenti saranno pronti."
+    ? t(locale, "Review the draft from the platform and wait for it to be sent for signature again when updates are ready.", "Rivedi la bozza dalla piattaforma e attendi il nuovo invio in firma quando gli aggiornamenti saranno pronti.")
     : params.recipientRole === "worker"
-      ? "Attendi che il preventivo venga aggiornato o inviato di nuovo in firma prima di riprendere le attività."
-      : "Rivedi contenuto, assegnazioni e ore registrate, quindi invia nuovamente il preventivo in firma quando è pronto.";
+      ? t(locale, "Wait for the quote to be updated or sent for signature again before resuming work.", "Attendi che il preventivo venga aggiornato o inviato di nuovo in firma prima di riprendere le attività.")
+      : t(locale, "Review content, assignments, and logged hours, then send the quote for signature again when ready.", "Rivedi contenuto, assegnazioni e ore registrate, quindi invia nuovamente il preventivo in firma quando è pronto.");
 
   const bodyRows = [
     `<p style="${STYLES.paragraph}">${roleIntro}</p>`,
-    `<p style="${STYLES.statusRow}"><span style="${STYLES.statusBadgeDraft}">Stato attuale · Bozza</span></p>`,
+    `<p style="${STYLES.statusRow}"><span style="${STYLES.statusBadgeDraft}">${t(locale, "Current status · Draft", "Stato attuale · Bozza")}</span></p>`,
     `<div style="${STYLES.detailCard}">
-          <p style="${STYLES.detailRow}"><span style="${STYLES.detailLabel}">Preventivo</span><span style="${STYLES.detailValue}">${escapedQuoteTitle}</span></p>
-          <p style="${STYLES.detailRowLast}"><span style="${STYLES.detailLabel}">Cliente</span><span style="${STYLES.detailValue}">${escapedCustomerDisplay}</span></p>
+          <p style="${STYLES.detailRow}"><span style="${STYLES.detailLabel}">${t(locale, "Quote", "Preventivo")}</span><span style="${STYLES.detailValue}">${escapedQuoteTitle}</span></p>
+          <p style="${STYLES.detailRowLast}"><span style="${STYLES.detailLabel}">${t(locale, "Customer", "Cliente")}</span><span style="${STYLES.detailValue}">${escapedCustomerDisplay}</span></p>
         </div>`,
     `<div style="${STYLES.notice}">
-          <p style="${STYLES.noticeTitle}">Prossimo passo</p>
+          <p style="${STYLES.noticeTitle}">${t(locale, "Next step", "Prossimo passo")}</p>
           <p style="${STYLES.noticeText}">${nextStep}</p>
         </div>`,
   ];
@@ -211,7 +318,7 @@ export function renderQuoteRevertedEmail(params: RevertedParams): RenderedEmail 
       footerNote,
       {
         eyebrow: "Hours Platform",
-        headerSubtitle: "Il preventivo è tornato alla fase modificabile con lo stesso stile pulito della piattaforma.",
+        headerSubtitle: t(locale, "The quote is back in the editable stage with the same clean platform experience.", "Il preventivo è tornato alla fase modificabile con lo stesso stile pulito della piattaforma."),
       },
     ),
   };

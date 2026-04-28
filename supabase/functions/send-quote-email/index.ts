@@ -11,6 +11,7 @@ interface EmailPayload {
   html: string;
   eventType?: string;
   quoteId?: string;
+  projectId?: string;
   recipientUserId?: string;
   locale?: string;
 }
@@ -48,7 +49,7 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  const { to, subject, html, eventType, quoteId, recipientUserId } =
+  const { to, subject, html, eventType, quoteId, projectId, recipientUserId } =
     payload;
 
   if (!to || !subject || !html) {
@@ -98,6 +99,7 @@ Deno.serve(async (req: Request) => {
     console.error("Failed to send email", {
       eventType,
       quoteId,
+      projectId,
       recipientUserId,
       error: message,
     });

@@ -4,10 +4,12 @@ const mocks = vi.hoisted(() => ({
   fetch: vi.fn(),
   profiles: [] as Array<{ id: string; role: string; locale: string | null; full_name: string | null }>,
   quote: { id: "quote-1", title: "Test Quote", customer_id: "customer-1" } as { id: string; title: string | null; customer_id: string } | null,
+  project: { id: "project-1", name: "Test Project", customer_id: "customer-1" } as { id: string; name: string | null; customer_id: string } | null,
   quoteWorkers: [] as Array<{ worker_id: string }>,
+  projectWorkers: [] as Array<{ worker_id: string }>,
   authEmails: {} as Record<string, string>,
   insertDuplicate: false,
-  notificationRows: [] as Array<{ id: string; quote_id: string; event_type: string; recipient_user_id: string; dedupe_key: string; status: "pending" | "sent" | "failed"; created_at: string; updated_at: string }>,
+  notificationRows: [] as Array<{ id: string; quote_id: string | null; project_id: string | null; event_type: string; recipient_user_id: string; dedupe_key: string; status: "pending" | "sent" | "failed"; created_at: string; updated_at: string }>,
   updatePayloads: [] as Array<Record<string, unknown>>,
 }));
 
@@ -83,8 +85,17 @@ class FakeQueryBuilder {
       return mocks.quote && (!id || mocks.quote.id === id) ? [mocks.quote] : [];
     }
 
+    if (this.table === "projects") {
+      const id = this.filters.get("id");
+      return mocks.project && (!id || mocks.project.id === id) ? [mocks.project] : [];
+    }
+
     if (this.table === "quote_workers") {
       return mocks.quoteWorkers;
+    }
+
+    if (this.table === "project_workers") {
+      return mocks.projectWorkers;
     }
 
     return [];
@@ -137,7 +148,8 @@ class FakeEmailNotificationsBuilder {
           const id = `log-${mocks.notificationRows.length + 1}`;
           mocks.notificationRows.push({
             id,
-            quote_id: String(payload.quote_id),
+            quote_id: typeof payload.quote_id === "string" ? payload.quote_id : null,
+            project_id: typeof payload.project_id === "string" ? payload.project_id : null,
             event_type: String(payload.event_type),
             recipient_user_id: String(payload.recipient_user_id),
             dedupe_key: String(payload.dedupe_key),
@@ -196,7 +208,9 @@ function resetFakeData() {
     { id: "worker-1", role: "worker", locale: "en", full_name: "Worker One" },
   ];
   mocks.quote = { id: "quote-1", title: "Test Quote", customer_id: "customer-1" };
+  mocks.project = { id: "project-1", name: "Test Project", customer_id: "customer-1" };
   mocks.quoteWorkers = [{ worker_id: "worker-1" }];
+  mocks.projectWorkers = [{ worker_id: "worker-1" }];
   mocks.authEmails = {
     "admin-1": "admin@example.com",
     "customer-1": "customer@example.com",
@@ -243,6 +257,30 @@ describe("resolveRecipients", () => {
   });
 });
 
+describe("resolveProjectRecipients", () => {
+  it("includes admins, the project customer, and assigned project workers", async () => {
+    const { resolveProjectRecipients } = await import("@/lib/notifications");
+    const recipients = await resolveProjectRecipients("project-1", true, true, true);
+
+    expect(recipients.map((recipient) => recipient.userId).sort()).toEqual(["admin-1", "customer-1", "worker-1"]);
+    expect(recipients.find((recipient) => recipient.userId === "customer-1")).toMatchObject({
+      role: "customer",
+      email: "customer@example.com",
+      locale: "it",
+    });
+  });
+
+  it("dedupes project recipients by userId", async () => {
+    mocks.project = { id: "project-1", name: "Test Project", customer_id: "admin-1" };
+    mocks.projectWorkers = [{ worker_id: "admin-1" }];
+
+    const { resolveProjectRecipients } = await import("@/lib/notifications");
+    const recipients = await resolveProjectRecipients("project-1", true, true, true);
+
+    expect(recipients.filter((recipient) => recipient.userId === "admin-1")).toHaveLength(1);
+  });
+});
+
 describe("quote notification dispatch", () => {
   it("notifyQuoteCreated posts the expected Edge Function payload", async () => {
     const { notifyQuoteCreated } = await import("@/lib/notifications");
@@ -283,7 +321,49 @@ describe("quote notification dispatch", () => {
     const bodies = mocks.fetch.mock.calls.map(([, options]) => JSON.parse(options.body as string));
     expect(bodies).toHaveLength(3);
     expect(bodies.every((body) => body.eventType === "quote_reverted")).toBe(true);
-    expect(bodies[0]!.subject).toContain("Preventivo riportato in bozza");
+    expect(bodies.map((body) => body.subject)).toEqual([
+      "Quote reverted to draft: Test Quote",
+      "Preventivo riportato in bozza: Test Quote",
+      "Quote reverted to draft: Test Quote",
+    ]);
+  });
+
+  it("notifyQuoteDiscussionMessage posts payloads for every related quote user", async () => {
+    const { notifyQuoteDiscussionMessage } = await import("@/lib/notifications");
+
+    await notifyQuoteDiscussionMessage({
+      quoteId: "quote-1",
+      authorName: "Worker One",
+      messageHtml: "<p>Hello related quote users</p>",
+      dedupeKey: "quote-discussion:comment-1",
+    });
+
+    const bodies = mocks.fetch.mock.calls.map(([, options]) => JSON.parse(options.body as string));
+    expect(bodies).toHaveLength(3);
+    expect(bodies.map((body) => body.eventType)).toEqual(["quote_discussion_message", "quote_discussion_message", "quote_discussion_message"]);
+    expect(bodies.map((body) => body.recipientUserId).sort()).toEqual(["admin-1", "customer-1", "worker-1"]);
+    expect(bodies.every((body) => body.quoteId === "quote-1")).toBe(true);
+    expect(bodies.every((body) => body.subject.includes("discussion") || body.subject.includes("discussione"))).toBe(true);
+    expect(bodies[0]!.html).toContain("Hello related quote users");
+  });
+
+  it("notifyProjectDiscussionMessage posts payloads for every related project user", async () => {
+    const { notifyProjectDiscussionMessage } = await import("@/lib/notifications");
+
+    await notifyProjectDiscussionMessage({
+      projectId: "project-1",
+      authorName: "Customer One",
+      messageHtml: "<p>Project discussion update</p>",
+      dedupeKey: "project-discussion:message-1",
+    });
+
+    const bodies = mocks.fetch.mock.calls.map(([, options]) => JSON.parse(options.body as string));
+    expect(bodies).toHaveLength(3);
+    expect(bodies.map((body) => body.eventType)).toEqual(["project_discussion_message", "project_discussion_message", "project_discussion_message"]);
+    expect(bodies.map((body) => body.recipientUserId).sort()).toEqual(["admin-1", "customer-1", "worker-1"]);
+    expect(bodies.every((body) => body.projectId === "project-1")).toBe(true);
+    expect(bodies.every((body) => body.quoteId === undefined)).toBe(true);
+    expect(bodies[0]!.html).toContain("Project discussion update");
   });
 });
 
@@ -315,6 +395,7 @@ describe("duplicate notification handling", () => {
     mocks.notificationRows = [{
       id: "existing-log",
       quote_id: "quote-1",
+      project_id: null,
       event_type: "quote_created",
       recipient_user_id: "admin-1",
       dedupe_key: "quote-created:quote-1",
@@ -333,6 +414,7 @@ describe("duplicate notification handling", () => {
     mocks.notificationRows = [{
       id: "failed-log",
       quote_id: "quote-1",
+      project_id: null,
       event_type: "quote_created",
       recipient_user_id: "admin-1",
       dedupe_key: "quote-created:quote-1",
@@ -354,6 +436,7 @@ describe("duplicate notification handling", () => {
     mocks.notificationRows = [{
       id: "pending-log",
       quote_id: "quote-1",
+      project_id: null,
       event_type: "quote_created",
       recipient_user_id: "admin-1",
       dedupe_key: "quote-created:quote-1",

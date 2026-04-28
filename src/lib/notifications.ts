@@ -1,6 +1,8 @@
 import {
+  renderProjectDiscussionMessageEmail,
   renderQuoteConvertedEmail,
   renderQuoteCreatedEmail,
+  renderQuoteDiscussionMessageEmail,
   renderQuoteRevertedEmail,
   type EmailEventType,
 } from "@/lib/email-templates";
@@ -15,6 +17,13 @@ type NotificationLocale = "en" | "it";
 interface QuoteNotificationContext {
   quoteId: string;
   quoteTitle: string;
+  customerId: string;
+  customerName: string;
+}
+
+interface ProjectNotificationContext {
+  projectId: string;
+  projectTitle: string;
   customerId: string;
   customerName: string;
 }
@@ -39,7 +48,17 @@ interface QuoteRow {
   customer_id: string;
 }
 
+interface ProjectRow {
+  id: string;
+  name: string | null;
+  customer_id: string;
+}
+
 interface QuoteWorkerRow {
+  worker_id: string;
+}
+
+interface ProjectWorkerRow {
   worker_id: string;
 }
 
@@ -64,6 +83,31 @@ function normalizeEmail(email: string | null | undefined) {
   return email?.trim().toLowerCase() ?? "";
 }
 
+function normalizePreviewText(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const withoutTags = value
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!withoutTags) {
+    return null;
+  }
+
+  return withoutTags.length > 240 ? `${withoutTags.slice(0, 237)}...` : withoutTags;
+}
+
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) {
     return error.message;
@@ -83,6 +127,8 @@ function isDuplicateNotificationError(error: { code?: string; message?: string }
 
   return error.code === "23505"
     || error.message?.includes("email_notifications_dedup_unique")
+    || error.message?.includes("email_notifications_quote_dedup_unique")
+    || error.message?.includes("email_notifications_project_dedup_unique")
     || false;
 }
 
@@ -116,6 +162,40 @@ async function getQuoteNotificationContext(quoteId: string): Promise<QuoteNotifi
     quoteId: quote.id,
     quoteTitle: quote.title?.trim() || "Untitled quote",
     customerId: quote.customer_id,
+    customerName: customerProfile?.full_name?.trim() || "—",
+  };
+}
+
+async function getProjectNotificationContext(projectId: string): Promise<ProjectNotificationContext> {
+  const adminClient = createAdminClient();
+  const { data: project, error: projectError } = await adminClient
+    .from("projects")
+    .select("id,name,customer_id")
+    .eq("id", projectId)
+    .maybeSingle<ProjectRow>();
+
+  if (projectError) {
+    throw new Error(projectError.message);
+  }
+
+  if (!project) {
+    throw new Error(`Project not found: ${projectId}`);
+  }
+
+  const { data: customerProfile, error: customerProfileError } = await adminClient
+    .from("profiles")
+    .select("id,full_name,locale,role")
+    .eq("id", project.customer_id)
+    .maybeSingle<RecipientProfileRow>();
+
+  if (customerProfileError) {
+    throw new Error(customerProfileError.message);
+  }
+
+  return {
+    projectId: project.id,
+    projectTitle: project.name?.trim() || "Untitled project",
+    customerId: project.customer_id,
     customerName: customerProfile?.full_name?.trim() || "—",
   };
 }
@@ -240,8 +320,95 @@ export async function resolveRecipients(
   return recipients;
 }
 
+export async function resolveProjectRecipients(
+  projectId: string,
+  includeAdmins: boolean,
+  includeCustomer: boolean,
+  includeWorkers: boolean,
+) {
+  const adminClient = createAdminClient();
+  const recipientRoles = new Map<string, NotificationRole>();
+
+  if (includeAdmins) {
+    const { data: adminProfiles, error: adminProfilesError } = await adminClient
+      .from("profiles")
+      .select("id")
+      .eq("role", "admin");
+
+    if (adminProfilesError) {
+      throw new Error(adminProfilesError.message);
+    }
+
+    for (const profile of adminProfiles ?? []) {
+      const userId = String(profile.id);
+      if (!recipientRoles.has(userId)) {
+        recipientRoles.set(userId, "admin");
+      }
+    }
+  }
+
+  let projectRow: ProjectRow | null = null;
+  if (includeCustomer || includeWorkers) {
+    const { data, error } = await adminClient
+      .from("projects")
+      .select("id,name,customer_id")
+      .eq("id", projectId)
+      .maybeSingle<ProjectRow>();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    if (!data) {
+      throw new Error(`Project not found: ${projectId}`);
+    }
+
+    projectRow = data;
+  }
+
+  if (includeCustomer && projectRow?.customer_id && !recipientRoles.has(projectRow.customer_id)) {
+    recipientRoles.set(projectRow.customer_id, "customer");
+  }
+
+  if (includeWorkers) {
+    const { data: workerRows, error: workerRowsError } = await adminClient
+      .from("project_workers")
+      .select("worker_id")
+      .eq("project_id", projectId);
+
+    if (workerRowsError) {
+      throw new Error(workerRowsError.message);
+    }
+
+    for (const row of (workerRows ?? []) as ProjectWorkerRow[]) {
+      const userId = String(row.worker_id);
+      if (!recipientRoles.has(userId)) {
+        recipientRoles.set(userId, "worker");
+      }
+    }
+  }
+
+  const userIds = [...recipientRoles.keys()];
+  const profilesById = await fetchProfilesByIds(userIds);
+
+  const recipients = await Promise.all(userIds.map(async (userId) => {
+    const profile = profilesById.get(userId);
+    const email = await resolveEmailForUser(userId);
+
+    return {
+      userId,
+      role: recipientRoles.get(userId) ?? profile?.role ?? "worker",
+      email,
+      locale: normalizeLocale(profile?.locale),
+    } satisfies ResolvedRecipient;
+  }));
+
+  return recipients;
+}
+
 async function insertPendingNotificationLog(params: {
-  quoteId: string;
+  quoteId?: string;
+  projectId?: string;
   eventType: EmailEventType;
   recipient: ResolvedRecipient;
   subject: string;
@@ -251,7 +418,8 @@ async function insertPendingNotificationLog(params: {
   const { data, error } = await adminClient
     .from("email_notifications")
     .insert({
-      quote_id: params.quoteId,
+      quote_id: params.quoteId ?? null,
+      project_id: params.projectId ?? null,
       event_type: params.eventType,
       recipient_user_id: params.recipient.userId,
       dedupe_key: params.dedupeKey,
@@ -306,7 +474,8 @@ async function updateNotificationLogStatus(notificationLogId: string, status: "p
 }
 
 async function getLatestNotificationLog(params: {
-  quoteId: string;
+  quoteId?: string;
+  projectId?: string;
   eventType: EmailEventType;
   recipientUserId: string;
   dedupeKey?: string;
@@ -315,9 +484,16 @@ async function getLatestNotificationLog(params: {
   let query = adminClient
     .from("email_notifications")
     .select("id,status,created_at,updated_at")
-    .eq("quote_id", params.quoteId)
     .eq("event_type", params.eventType)
     .eq("recipient_user_id", params.recipientUserId);
+
+  if (params.quoteId) {
+    query = query.eq("quote_id", params.quoteId);
+  }
+
+  if (params.projectId) {
+    query = query.eq("project_id", params.projectId);
+  }
 
   if (params.dedupeKey) {
     query = query.eq("dedupe_key", params.dedupeKey);
@@ -348,7 +524,8 @@ function isStalePendingNotification(row: NotificationLogRow) {
 }
 
 async function dispatchNotification(params: {
-  quoteId: string;
+  quoteId?: string;
+  projectId?: string;
   eventType: EmailEventType;
   recipient: ResolvedRecipient;
   subject: string;
@@ -374,6 +551,7 @@ async function dispatchNotification(params: {
       html: params.html,
       eventType: params.eventType,
       quoteId: params.quoteId,
+      projectId: params.projectId,
       recipientUserId: params.recipient.userId,
       locale: params.recipient.locale,
     }),
@@ -387,12 +565,13 @@ async function dispatchNotification(params: {
 
 function logSettledNotificationFailures(
   results: PromiseSettledResult<void>[],
-  context: { quoteId: string; eventType: EmailEventType },
+  context: { quoteId?: string; projectId?: string; eventType: EmailEventType },
 ) {
   for (const result of results) {
     if (result.status === "rejected") {
       console.error("Email notification send failed", {
         quoteId: context.quoteId,
+        projectId: context.projectId,
         eventType: context.eventType,
         error: getErrorMessage(result.reason),
       });
@@ -401,7 +580,8 @@ function logSettledNotificationFailures(
 }
 
 async function sendNotificationToRecipient(params: {
-  quoteId: string;
+  quoteId?: string;
+  projectId?: string;
   eventType: EmailEventType;
   recipient: ResolvedRecipient;
   subject: string;
@@ -410,6 +590,7 @@ async function sendNotificationToRecipient(params: {
 }) {
   const existingLog = await getLatestNotificationLog({
     quoteId: params.quoteId,
+    projectId: params.projectId,
     eventType: params.eventType,
     recipientUserId: params.recipient.userId,
     dedupeKey: params.dedupeKey,
@@ -435,6 +616,7 @@ async function sendNotificationToRecipient(params: {
       } catch (updateError) {
         console.error("Failed to update notification log status", {
           quoteId: params.quoteId,
+          projectId: params.projectId,
           eventType: params.eventType,
           recipientUserId: params.recipient.userId,
           error: getErrorMessage(updateError),
@@ -449,6 +631,7 @@ async function sendNotificationToRecipient(params: {
 
   const pendingResult = await insertPendingNotificationLog({
     quoteId: params.quoteId,
+    projectId: params.projectId,
     eventType: params.eventType,
     recipient: params.recipient,
     subject: params.subject,
@@ -458,6 +641,7 @@ async function sendNotificationToRecipient(params: {
   if (pendingResult.status === "duplicate") {
     const duplicateLog = await getLatestNotificationLog({
       quoteId: params.quoteId,
+      projectId: params.projectId,
       eventType: params.eventType,
       recipientUserId: params.recipient.userId,
       dedupeKey: params.dedupeKey,
@@ -476,6 +660,7 @@ async function sendNotificationToRecipient(params: {
         } catch (updateError) {
           console.error("Failed to update notification log status", {
             quoteId: params.quoteId,
+            projectId: params.projectId,
             eventType: params.eventType,
             recipientUserId: params.recipient.userId,
             error: getErrorMessage(updateError),
@@ -500,6 +685,7 @@ async function sendNotificationToRecipient(params: {
     } catch (updateError) {
       console.error("Failed to update notification log status", {
         quoteId: params.quoteId,
+        projectId: params.projectId,
         eventType: params.eventType,
         recipientUserId: params.recipient.userId,
         error: getErrorMessage(updateError),
@@ -586,6 +772,108 @@ export async function notifyQuoteCreated(quoteId: string, customerId: string) {
     console.error("notifyQuoteCreated failed", {
       quoteId,
       customerId,
+      error: getErrorMessage(error),
+    });
+  }
+}
+
+export async function notifyQuoteDiscussionMessage(params: {
+  quoteId: string;
+  authorName?: string | null;
+  messageHtml?: string | null;
+  dedupeKey?: string;
+}) {
+  try {
+    const [context, recipients] = await Promise.all([
+      getQuoteNotificationContext(params.quoteId),
+      resolveRecipients(params.quoteId, true, true, true),
+    ]);
+    const dedupeKey = params.dedupeKey ?? `quote-discussion:${params.quoteId}:${Date.now()}`;
+    const messagePreview = normalizePreviewText(params.messageHtml);
+    const authorName = params.authorName?.trim() || "Someone";
+
+    const results = await Promise.allSettled(
+      recipients.map(async (recipient) => {
+        const renderedEmail = renderQuoteDiscussionMessageEmail({
+          locale: recipient.locale,
+          quoteTitle: context.quoteTitle,
+          quoteId: context.quoteId,
+          customerName: context.customerName,
+          authorName,
+          messagePreview,
+          appUrl: env.appUrl,
+          recipientRole: recipient.role,
+        });
+
+        await sendNotificationToRecipient({
+          quoteId: context.quoteId,
+          eventType: "quote_discussion_message",
+          recipient,
+          subject: renderedEmail.subject,
+          html: renderedEmail.html,
+          dedupeKey,
+        });
+      }),
+    );
+
+    logSettledNotificationFailures(results, {
+      quoteId: context.quoteId,
+      eventType: "quote_discussion_message",
+    });
+  } catch (error) {
+    console.error("notifyQuoteDiscussionMessage failed", {
+      quoteId: params.quoteId,
+      error: getErrorMessage(error),
+    });
+  }
+}
+
+export async function notifyProjectDiscussionMessage(params: {
+  projectId: string;
+  authorName?: string | null;
+  messageHtml?: string | null;
+  dedupeKey?: string;
+}) {
+  try {
+    const [context, recipients] = await Promise.all([
+      getProjectNotificationContext(params.projectId),
+      resolveProjectRecipients(params.projectId, true, true, true),
+    ]);
+    const dedupeKey = params.dedupeKey ?? `project-discussion:${params.projectId}:${Date.now()}`;
+    const messagePreview = normalizePreviewText(params.messageHtml);
+    const authorName = params.authorName?.trim() || "Someone";
+
+    const results = await Promise.allSettled(
+      recipients.map(async (recipient) => {
+        const renderedEmail = renderProjectDiscussionMessageEmail({
+          locale: recipient.locale,
+          projectTitle: context.projectTitle,
+          projectId: context.projectId,
+          customerName: context.customerName,
+          authorName,
+          messagePreview,
+          appUrl: env.appUrl,
+          recipientRole: recipient.role,
+        });
+
+        await sendNotificationToRecipient({
+          projectId: context.projectId,
+          eventType: "project_discussion_message",
+          recipient,
+          subject: renderedEmail.subject,
+          html: renderedEmail.html,
+          dedupeKey,
+        });
+      }),
+    );
+
+    logSettledNotificationFailures(results, {
+      projectId: context.projectId,
+      eventType: "project_discussion_message",
+    });
+  } catch (error) {
+    console.error("notifyProjectDiscussionMessage failed", {
+      projectId: params.projectId,
       error: getErrorMessage(error),
     });
   }
