@@ -78,7 +78,11 @@ export async function POST(request: Request) {
       }
 
       after(async () => {
-        await notifyQuoteConverted(quoteId, `stripe:${event.id}`);
+        await notifyQuoteConverted(quoteId, {
+          dedupeKey: `stripe:${event.id}`,
+          actorUserId: customerId,
+          actorLocale: metadata.locale,
+        });
       });
 
       return NextResponse.json({ received: true });

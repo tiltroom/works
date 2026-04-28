@@ -1147,7 +1147,7 @@ export async function signQuoteAction(formData: FormData) {
 
 export async function revertQuoteToDraftAction(formData: FormData) {
   const locale = await getLocale();
-  await requireRole(["admin"]);
+  const profile = await requireRole(["admin"]);
   const quoteId = trimString(formData, "quoteId");
 
   if (!quoteId) {
@@ -1184,13 +1184,16 @@ export async function revertQuoteToDraftAction(formData: FormData) {
 
   revalidateQuotesModule(quoteId);
   after(async () => {
-    await notifyQuoteReverted(quoteId);
+    await notifyQuoteReverted(quoteId, {
+      actorUserId: profile.id,
+      actorLocale: locale,
+    });
   });
 }
 
 export async function switchQuoteToPostpaidAction(formData: FormData) {
   const locale = await getLocale();
-  await requireRole(["admin"]);
+  const profile = await requireRole(["admin"]);
   const quoteId = trimString(formData, "quoteId");
   const adminComment = trimString(formData, "adminComment");
 
@@ -1236,13 +1239,16 @@ export async function switchQuoteToPostpaidAction(formData: FormData) {
   revalidateQuotesModule(quoteId);
 
   after(async () => {
-    await notifyQuoteConverted(quoteId);
+    await notifyQuoteConverted(quoteId, {
+      actorUserId: profile.id,
+      actorLocale: locale,
+    });
   });
 }
 
 export async function markQuoteAsPaidAction(formData: FormData) {
   const locale = await getLocale();
-  await requireRole(["admin"]);
+  const profile = await requireRole(["admin"]);
   const quoteId = trimString(formData, "quoteId");
   const adminComment = trimString(formData, "adminComment");
 
@@ -1312,7 +1318,10 @@ export async function markQuoteAsPaidAction(formData: FormData) {
   revalidateQuotesModule(quoteId);
 
   after(async () => {
-    await notifyQuoteConverted(quoteId);
+    await notifyQuoteConverted(quoteId, {
+      actorUserId: profile.id,
+      actorLocale: locale,
+    });
   });
 }
 
@@ -1405,6 +1414,7 @@ export async function createCheckoutForQuotePrepaymentAction(formData: FormData)
       customerId: profile.id,
       amountCents: String(amountCents),
       currency: env.stripeCurrency,
+      locale,
     },
   });
 
@@ -1491,7 +1501,10 @@ export async function startQuoteConversionCheckoutAction(formData: FormData) {
 
     revalidateQuotesModule(quoteId);
     after(async () => {
-      await notifyQuoteConverted(quoteId);
+      await notifyQuoteConverted(quoteId, {
+        actorUserId: profile.id,
+        actorLocale: locale,
+      });
     });
     return redirect(
       withQueryToast(

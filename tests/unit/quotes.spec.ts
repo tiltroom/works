@@ -945,7 +945,7 @@ describe("quotes helpers", () => {
 
   it("uses the admin client to customer-sign postpaid quotes before RPC conversion", async () => {
     vi.resetModules();
-    mockGetLocale.mockResolvedValue("en");
+    mockGetLocale.mockResolvedValue("it");
     mockRequireRole.mockResolvedValue({ id: "customer-1", role: "customer", full_name: "Customer User" });
     const { browserClient, adminClient, update, rpc } = createMockSupabaseForCustomerPostpaidConversion();
     mockCreateClient.mockResolvedValue(browserClient);
@@ -966,6 +966,10 @@ describe("quotes helpers", () => {
       p_quote_id: "quote-postpaid-001",
       p_admin_comment: null,
     });
+    expect(mockNotifyQuoteConverted).toHaveBeenCalledWith("quote-postpaid-001", {
+      actorUserId: "customer-1",
+      actorLocale: "it",
+    });
   });
 
   it("admin sign modal asks for prepaid or post-paid billing mode", () => {
@@ -985,6 +989,7 @@ describe("quotes helpers", () => {
   });
 
   it("allows admins to detach a converted quote back to draft while clearing quote-side conversion state", async () => {
+    mockGetLocale.mockResolvedValue("it");
     mockRequireRole.mockResolvedValue({ id: "admin-1", role: "admin" });
     const { client, update } = createMockSupabaseForRevertQuote();
     mockCreateClient.mockResolvedValue(client);
@@ -1007,6 +1012,10 @@ describe("quotes helpers", () => {
       converted_at: null,
     }));
     expect(mockRevalidatePath).toHaveBeenCalled();
+    expect(mockNotifyQuoteReverted).toHaveBeenCalledWith("quote-revert-1", {
+      actorUserId: "admin-1",
+      actorLocale: "it",
+    });
   });
 
   it("rejects revert to draft when the quote is already draft", async () => {
