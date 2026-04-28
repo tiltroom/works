@@ -155,7 +155,7 @@ describe("renderQuoteConvertedEmail", () => {
 });
 
 describe("renderQuoteRevertedEmail", () => {
-  it("renders subject and html in English", () => {
+  it("renders Italian subject and html even when locale is English", () => {
     const result = renderQuoteRevertedEmail({
       locale: "en",
       quoteTitle: QUOTE_TITLE,
@@ -164,9 +164,12 @@ describe("renderQuoteRevertedEmail", () => {
       appUrl: APP_URL,
     });
 
-    expect(result.subject).toBe("Quote Reverted: Kitchen Renovation");
-    expect(result.html).toContain("Quote Reverted to Draft");
+    expect(result.subject).toBe("Preventivo riportato in bozza: Kitchen Renovation");
+    expect(result.html).toContain('html lang="it"');
+    expect(result.html).toContain("Preventivo riportato in bozza");
+    expect(result.html).toContain("Stato attuale · Bozza");
     expect(result.html).toContain("Mario Rossi");
+    expect(result.html).not.toContain("Quote Reverted to Draft");
   });
 
   it("renders subject and html in Italian", () => {
@@ -178,8 +181,9 @@ describe("renderQuoteRevertedEmail", () => {
       appUrl: APP_URL,
     });
 
-    expect(result.subject).toBe("Preventivo Ripristinato: Kitchen Renovation");
-    expect(result.html).toContain("Preventivo Ripristinato a Bozza");
+    expect(result.subject).toBe("Preventivo riportato in bozza: Kitchen Renovation");
+    expect(result.html).toContain("Preventivo riportato in bozza");
+    expect(result.html).toContain("Prossimo passo");
   });
 
   it("uses admin link when recipientRole is undefined", () => {
@@ -205,7 +209,7 @@ describe("renderQuoteRevertedEmail", () => {
     });
 
     expect(result.html).toContain(`/customer/quotes/${QUOTE_ID}`);
-    expect(result.html).toContain("reverted to draft");
+    expect(result.html).toContain("associato al tuo account");
   });
 
   it("uses worker link when recipientRole is 'worker'", () => {
@@ -219,6 +223,6 @@ describe("renderQuoteRevertedEmail", () => {
     });
 
     expect(result.html).toContain(`/worker/quotes/${QUOTE_ID}`);
-    expect(result.html).toContain("Logging hours is paused");
+    expect(result.html).toContain("registrazione delle ore è temporaneamente sospesa");
   });
 });

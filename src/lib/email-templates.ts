@@ -26,17 +26,27 @@ interface RevertedParams extends CreatedParams {
 }
 
 const STYLES = {
-  body: "margin:0;padding:0;background-color:#f4f5f7;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;",
-  wrapper: "max-width:600px;margin:0 auto;padding:24px;",
-  card: "background-color:#ffffff;border-radius:8px;border:1px solid #e0e0e0;overflow:hidden;",
-  header: "background-color:#1a1a2e;color:#ffffff;padding:24px 32px;",
-  headerTitle: "margin:0;font-size:20px;font-weight:600;",
-  content: "padding:24px 32px;",
-  paragraph: "margin:0 0 16px;font-size:15px;line-height:1.6;color:#333333;",
-  detailRow: "margin:0 0 8px;font-size:14px;line-height:1.5;color:#555555;",
-  detailLabel: "font-weight:600;color:#333333;",
-  ctaButton: "display:inline-block;padding:12px 24px;background-color:#1a1a2e;color:#ffffff;text-decoration:none;border-radius:6px;font-size:14px;font-weight:600;",
-  footer: "padding:16px 32px 24px;font-size:12px;color:#999999;text-align:center;",
+  body: "margin:0;padding:0;background-color:#f4f5f9;color:#18181b;font-family:Geist,ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;",
+  wrapper: "max-width:640px;margin:0 auto;padding:32px 20px;",
+  card: "background:linear-gradient(145deg,rgba(255,255,255,0.96) 0%,rgba(244,245,249,0.88) 100%);border-radius:20px;border:1px solid rgba(24,24,27,0.08);overflow:hidden;box-shadow:0 18px 40px -24px rgba(15,23,42,0.28);",
+  header: "background:radial-gradient(circle at 12% 16%,rgba(199,210,254,0.48) 0,rgba(199,210,254,0) 34%),linear-gradient(135deg,#312e81 0%,#4f46e5 52%,#6366f1 100%);color:#ffffff;padding:28px 32px 24px;",
+  eyebrow: "margin:0 0 10px;font-size:12px;line-height:1.4;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#c7d2fe;",
+  headerTitle: "margin:0;font-size:24px;line-height:1.2;font-weight:700;letter-spacing:-0.02em;color:#ffffff;",
+  headerSubtitle: "margin:10px 0 0;font-size:14px;line-height:1.6;color:#e0e7ff;",
+  content: "padding:28px 32px 30px;",
+  paragraph: "margin:0 0 18px;font-size:15px;line-height:1.7;color:#27272a;",
+  detailCard: "margin:18px 0 0;border:1px solid rgba(212,212,216,0.7);border-radius:14px;background-color:rgba(244,245,249,0.6);overflow:hidden;",
+  detailRow: "margin:0;padding:12px 14px;border-bottom:1px solid rgba(212,212,216,0.7);font-size:14px;line-height:1.5;color:#52525b;",
+  detailRowLast: "margin:0;padding:12px 14px;font-size:14px;line-height:1.5;color:#52525b;",
+  detailLabel: "display:block;margin-bottom:3px;font-size:11px;line-height:1.4;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#71717a;",
+  detailValue: "font-size:14px;font-weight:600;color:#18181b;",
+  statusRow: "margin:0 0 18px;",
+  statusBadgeDraft: "display:inline-block;border:1px solid rgba(212,212,216,0.7);border-radius:999px;background-color:rgba(244,245,249,0.72);padding:6px 11px;font-size:12px;line-height:1;font-weight:700;color:#52525b;",
+  notice: "margin:18px 0 0;border:1px solid rgba(79,70,229,0.2);border-radius:14px;background-color:rgba(99,102,241,0.08);padding:14px 16px;",
+  noticeTitle: "margin:0 0 4px;font-size:13px;line-height:1.4;font-weight:700;color:#312e81;",
+  noticeText: "margin:0;font-size:14px;line-height:1.6;color:#3730a3;",
+  ctaButton: "display:inline-block;padding:12px 18px;background-color:#4f46e5;color:#ffffff;text-decoration:none;border-radius:10px;font-size:14px;font-weight:700;box-shadow:0 18px 32px -22px rgba(79,70,229,0.62);",
+  footer: "padding:18px 32px 0;font-size:12px;line-height:1.5;color:#71717a;text-align:center;",
 } as const;
 
 function t(locale: Locale, en: string, it: string) {
@@ -61,7 +71,15 @@ function buildLink(appUrl: string, quoteId: string, role?: RecipientRole): strin
   return `${base}/${segment}/quotes/${quoteId}`;
 }
 
-function buildEmailHtml(locale: Locale, headerText: string, bodyRows: string[], ctaUrl: string, ctaLabel: string, footerNote: string) {
+function buildEmailHtml(
+  locale: Locale,
+  headerText: string,
+  bodyRows: string[],
+  ctaUrl: string,
+  ctaLabel: string,
+  footerNote: string,
+  options?: { eyebrow?: string; headerSubtitle?: string },
+) {
   return `<!DOCTYPE html>
 <html lang="${locale === "it" ? "it" : "en"}">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -69,12 +87,14 @@ function buildEmailHtml(locale: Locale, headerText: string, bodyRows: string[], 
   <div style="${STYLES.wrapper}">
     <div style="${STYLES.card}">
       <div style="${STYLES.header}">
+        ${options?.eyebrow ? `<p style="${STYLES.eyebrow}">${escapeHtml(options.eyebrow)}</p>` : ""}
         <h1 style="${STYLES.headerTitle}">${escapeHtml(headerText)}</h1>
+        ${options?.headerSubtitle ? `<p style="${STYLES.headerSubtitle}">${escapeHtml(options.headerSubtitle)}</p>` : ""}
       </div>
       <div style="${STYLES.content}">
         ${bodyRows.join("\n        ")}
         <p style="margin:24px 0 0;">
-          <a href="${ctaUrl}" style="${STYLES.ctaButton}">${escapeHtml(ctaLabel)}</a>
+          <a href="${escapeHtml(ctaUrl)}" style="${STYLES.ctaButton}">${escapeHtml(ctaLabel)}</a>
         </p>
       </div>
     </div>
@@ -143,33 +163,56 @@ export function renderQuoteConvertedEmail(params: ConvertedParams): RenderedEmai
 }
 
 export function renderQuoteRevertedEmail(params: RevertedParams): RenderedEmail {
-  const locale = normalizeLocale(params.locale);
-  const quoteTitle = params.quoteTitle || "Untitled quote";
+  const locale: Locale = "it";
+  const quoteTitle = params.quoteTitle || "Preventivo senza titolo";
   const customerDisplay = params.customerName || "—";
   const link = buildLink(params.appUrl, params.quoteId, params.recipientRole);
+  const escapedQuoteTitle = escapeHtml(quoteTitle);
+  const escapedCustomerDisplay = escapeHtml(customerDisplay);
 
-  const subject = t(locale, `Quote Reverted: ${quoteTitle}`, `Preventivo Ripristinato: ${quoteTitle}`);
-  const headerText = t(locale, "Quote Reverted to Draft", "Preventivo Ripristinato a Bozza");
-  const ctaLabel = t(locale, "View Quote", "Visualizza Preventivo");
-  const footerNote = t(
-    locale,
-    "You received this email because you are associated with this quote.",
-    "Hai ricevuto questa email perché sei associato a questo preventivo.",
-  );
+  const subject = `Preventivo riportato in bozza: ${quoteTitle}`;
+  const headerText = "Preventivo riportato in bozza";
+  const ctaLabel = "Apri preventivo";
+  const footerNote = "Hai ricevuto questa email perché sei associato a questo preventivo.";
 
   const roleIntro = params.recipientRole === "customer"
-    ? t(locale, `A quote associated with your account has been reverted to draft: ${escapeHtml(quoteTitle)}.`, `Un preventivo associato al tuo account è stato ripristinato a bozza: ${escapeHtml(quoteTitle)}.`)
+    ? `Il preventivo associato al tuo account è stato riportato in bozza: <strong>${escapedQuoteTitle}</strong>.`
     : params.recipientRole === "worker"
-      ? t(locale, `A quote assigned to you has been reverted to draft: ${escapeHtml(quoteTitle)}. Logging hours is paused.`, `Un preventivo assegnato a te è stato ripristinato a bozza: ${escapeHtml(quoteTitle)}. La registrazione delle ore è in pausa.`)
-      : t(locale, `Quote '${escapeHtml(quoteTitle)}' has been reverted to draft.`, `Il preventivo '${escapeHtml(quoteTitle)}' è stato ripristinato a bozza.`);
+      ? `Il preventivo assegnato a te è stato riportato in bozza: <strong>${escapedQuoteTitle}</strong>. La registrazione delle ore è temporaneamente sospesa.`
+      : `Il preventivo <strong>${escapedQuoteTitle}</strong> è stato riportato in bozza.`;
+
+  const nextStep = params.recipientRole === "customer"
+    ? "Rivedi la bozza dalla piattaforma e attendi il nuovo invio in firma quando gli aggiornamenti saranno pronti."
+    : params.recipientRole === "worker"
+      ? "Attendi che il preventivo venga aggiornato o inviato di nuovo in firma prima di riprendere le attività."
+      : "Rivedi contenuto, assegnazioni e ore registrate, quindi invia nuovamente il preventivo in firma quando è pronto.";
 
   const bodyRows = [
     `<p style="${STYLES.paragraph}">${roleIntro}</p>`,
-    `<p style="${STYLES.detailRow}"><span style="${STYLES.detailLabel}">${t(locale, "Customer:", "Cliente:")}</span> ${escapeHtml(customerDisplay)}</p>`,
+    `<p style="${STYLES.statusRow}"><span style="${STYLES.statusBadgeDraft}">Stato attuale · Bozza</span></p>`,
+    `<div style="${STYLES.detailCard}">
+          <p style="${STYLES.detailRow}"><span style="${STYLES.detailLabel}">Preventivo</span><span style="${STYLES.detailValue}">${escapedQuoteTitle}</span></p>
+          <p style="${STYLES.detailRowLast}"><span style="${STYLES.detailLabel}">Cliente</span><span style="${STYLES.detailValue}">${escapedCustomerDisplay}</span></p>
+        </div>`,
+    `<div style="${STYLES.notice}">
+          <p style="${STYLES.noticeTitle}">Prossimo passo</p>
+          <p style="${STYLES.noticeText}">${nextStep}</p>
+        </div>`,
   ];
 
   return {
     subject,
-    html: buildEmailHtml(locale, headerText, bodyRows, link, ctaLabel, footerNote),
+    html: buildEmailHtml(
+      locale,
+      headerText,
+      bodyRows,
+      link,
+      ctaLabel,
+      footerNote,
+      {
+        eyebrow: "Hours Platform",
+        headerSubtitle: "Il preventivo è tornato alla fase modificabile con lo stesso stile pulito della piattaforma.",
+      },
+    ),
   };
 }

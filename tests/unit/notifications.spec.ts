@@ -283,7 +283,7 @@ describe("quote notification dispatch", () => {
     const bodies = mocks.fetch.mock.calls.map(([, options]) => JSON.parse(options.body as string));
     expect(bodies).toHaveLength(3);
     expect(bodies.every((body) => body.eventType === "quote_reverted")).toBe(true);
-    expect(bodies[0]!.subject).toContain("Reverted");
+    expect(bodies[0]!.subject).toContain("Preventivo riportato in bozza");
   });
 });
 
