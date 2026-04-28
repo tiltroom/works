@@ -549,6 +549,11 @@ async function dispatchNotification(params: {
     throw new Error("Missing EDGE_FUNCTION_SECRET");
   }
 
+  console.info("Sending email notification", {
+    email: params.recipient.email,
+    eventType: params.eventType,
+  });
+
   const response = await fetch(env.edgeFunctionUrl, {
     method: "POST",
     headers: {
