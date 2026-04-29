@@ -128,6 +128,38 @@ describe("quote conversion billing mode branching", () => {
     expect(schemaSql).toContain("and te.quote_subtask_entry_id is null");
   });
 
+  it("adds a direct quote subtask link for project time entries", () => {
+    const migrationSql = readFileSync(
+      join(process.cwd(), "supabase", "2026-04-24-link-time-entries-to-quote-subtasks.sql"),
+      "utf8",
+    );
+
+    expect(migrationSql).toContain("add column if not exists quote_subtask_id uuid");
+    expect(migrationSql).toContain("add constraint time_entries_quote_subtask_id_fkey");
+    expect(migrationSql).toContain("references public.quote_subtasks(id)");
+    expect(migrationSql).toContain("idx_time_entries_quote_subtask_id");
+    expect(migrationSql).toMatch(/update public\.time_entries te[\s\S]*set quote_subtask_id = qse\.quote_subtask_id/);
+    expect(migrationSql).toContain("create or replace function public.sync_time_entry_quote_subtask_id");
+    expect(migrationSql).toMatch(/insert into public\.time_entries[\s\S]*quote_subtask_id,[\s\S]*quote_subtask_entry_id/);
+    expect(migrationSql).toContain("quote_subtask_id = excluded.quote_subtask_id");
+  });
+
+  it("keeps the direct quote subtask link in a dated migration instead of the bootstrap schema", () => {
+    const schemaSql = readFileSync(
+      join(process.cwd(), "supabase", "schema.sql"),
+      "utf8",
+    );
+    const migrationSql = readFileSync(
+      join(process.cwd(), "supabase", "2026-04-24-link-time-entries-to-quote-subtasks.sql"),
+      "utf8",
+    );
+
+    expect(schemaSql).not.toContain("quote_subtask_id uuid");
+    expect(schemaSql).not.toContain("idx_time_entries_quote_subtask_id");
+    expect(migrationSql).toContain("add column if not exists quote_subtask_id uuid");
+    expect(migrationSql).toContain("idx_time_entries_quote_subtask_id");
+  });
+
   it("runs quote subtask entry copying in every conversion entry point", () => {
     const migrationSql = readFileSync(
       join(process.cwd(), "supabase", "2026-04-18-copy-quote-subtask-entries-to-project.sql"),
