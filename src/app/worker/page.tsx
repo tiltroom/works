@@ -34,6 +34,18 @@ interface TimeEntryRow {
   } | null;
 }
 
+interface LinkedQuoteRow {
+  id: string;
+  title: string;
+  linked_project_id: string | null;
+}
+
+interface QuoteSubtaskRow {
+  id: string;
+  quote_id: string;
+  title: string;
+}
+
 function formatForDatetimeLocal(value: string) {
   const date = new Date(value);
   const offset = date.getTimezoneOffset() * 60000;
@@ -131,6 +143,38 @@ export default async function WorkerPage({
   const assignedProjects = (assignedRows ?? []) as unknown as WorkerProjectRow[];
   const entries = (timeEntries ?? []) as unknown as TimeEntryRow[];
   const running = runningFromDb;
+  const assignedProjectIds = assignedProjects.map((row) => row.project_id);
+  const { data: linkedQuotesForProjects } = assignedProjectIds.length > 0
+    ? await supabase
+        .from("quotes")
+        .select("id,title,linked_project_id")
+        .in("linked_project_id", assignedProjectIds)
+    : { data: [] };
+  const linkedQuotes = (linkedQuotesForProjects ?? []) as LinkedQuoteRow[];
+  const linkedQuoteIds = linkedQuotes.map((quote) => quote.id);
+  const { data: quoteSubtasksForProjects } = linkedQuoteIds.length > 0
+    ? await supabase
+        .from("quote_subtasks")
+        .select("id,quote_id,title")
+        .in("quote_id", linkedQuoteIds)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true })
+    : { data: [] };
+  const quoteProjectIdByQuoteId = new Map(linkedQuotes.map((quote) => [quote.id, quote.linked_project_id]));
+  const subtaskOptionsByProjectId = new Map<string, QuoteSubtaskRow[]>();
+
+  for (const subtask of (quoteSubtasksForProjects ?? []) as QuoteSubtaskRow[]) {
+    const subtaskProjectId = quoteProjectIdByQuoteId.get(subtask.quote_id);
+    if (!subtaskProjectId) {
+      continue;
+    }
+
+    const subtasksForProject = subtaskOptionsByProjectId.get(subtaskProjectId) ?? [];
+    subtasksForProject.push(subtask);
+    subtaskOptionsByProjectId.set(subtaskProjectId, subtasksForProject);
+  }
+
+  const hasQuoteSubtaskOptions = subtaskOptionsByProjectId.size > 0;
 
   const activeFilterProjectIds = new Set(assignedProjects.map((row) => row.project_id));
 
@@ -253,6 +297,31 @@ export default async function WorkerPage({
                     ))}
                   </select>
                 </div>
+                {hasQuoteSubtaskOptions ? (
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <label htmlFor="quoteSubtaskId" className="text-sm font-medium text-foreground">{t(locale, "Quote subtask", "Sottoattività preventivo")}</label>
+                    <select id="quoteSubtaskId" name="quoteSubtaskId" className={`${inputClass} appearance-none focus:ring-emerald-500`}>
+                      <option value="" className="bg-background text-foreground">{t(locale, "Optional: select an activity", "Opzionale: seleziona un'attività")}</option>
+                      {assignedProjects.map((row) => {
+                        const subtaskOptions = subtaskOptionsByProjectId.get(row.project_id) ?? [];
+                        if (subtaskOptions.length === 0) {
+                          return null;
+                        }
+
+                        return (
+                          <optgroup key={row.project_id} label={row.projects?.name || row.project_id}>
+                            {subtaskOptions.map((subtask) => (
+                              <option key={subtask.id} value={subtask.id} className="bg-background text-foreground">
+                                {subtask.title}
+                              </option>
+                            ))}
+                          </optgroup>
+                        );
+                      })}
+                    </select>
+                    <p className="text-xs text-muted-foreground">{t(locale, "Selecting a subtask keeps this timer aligned with the project quote breakdown.", "Selezionare una sottoattività mantiene questo timer allineato alla suddivisione del preventivo.")}</p>
+                  </div>
+                ) : null}
                 <div className="space-y-1.5 sm:col-span-2">
                   <label htmlFor="description" className="text-sm font-medium text-foreground">{t(locale, "Task Description", "Descrizione attività")}</label>
                   <input
@@ -471,6 +540,30 @@ export default async function WorkerPage({
                   ))}
                 </select>
               </div>
+              {hasQuoteSubtaskOptions ? (
+                <div className="space-y-1.5">
+                  <label htmlFor="manual-quoteSubtaskId" className="text-sm font-medium text-foreground">{t(locale, "Quote subtask", "Sottoattività preventivo")}</label>
+                  <select id="manual-quoteSubtaskId" name="quoteSubtaskId" className={`${compactInputClass} appearance-none focus:ring-amber-500`}>
+                    <option value="" className="bg-background text-foreground">{t(locale, "Optional activity", "Attività opzionale")}</option>
+                    {assignedProjects.map((row) => {
+                      const subtaskOptions = subtaskOptionsByProjectId.get(row.project_id) ?? [];
+                      if (subtaskOptions.length === 0) {
+                        return null;
+                      }
+
+                      return (
+                        <optgroup key={row.project_id} label={row.projects?.name || row.project_id}>
+                          {subtaskOptions.map((subtask) => (
+                            <option key={subtask.id} value={subtask.id} className="bg-background text-foreground">
+                              {subtask.title}
+                            </option>
+                          ))}
+                        </optgroup>
+                      );
+                    })}
+                  </select>
+                </div>
+              ) : null}
               
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
