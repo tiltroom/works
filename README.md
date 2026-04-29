@@ -37,10 +37,11 @@ STRIPE_CURRENCY=usd
 
 ## 2) Supabase database + RLS
 
-Run SQL from:
+Run SQL from the base schema, then apply the dated migration files in `supabase/` in filename order:
 
 ```bash
 supabase/schema.sql
+supabase/2026-*.sql
 ```
 
 This creates:
