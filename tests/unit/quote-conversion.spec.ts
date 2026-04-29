@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseQuoteRecord } from "@/lib/quotes";
 
@@ -70,5 +72,80 @@ describe("quote conversion billing mode branching", () => {
     expect(record).toHaveProperty("billingMode");
     expect(typeof record.billingMode).toBe("string");
     expect(["prepaid", "postpaid"]).toContain(record.billingMode);
+  });
+
+  it("copies logged quote subtask entries into project time entries idempotently", () => {
+    const migrationSql = readFileSync(
+      join(process.cwd(), "supabase", "2026-04-18-copy-quote-subtask-entries-to-project.sql"),
+      "utf8",
+    );
+
+    expect(migrationSql).toContain("add column if not exists quote_subtask_entry_id uuid");
+    expect(migrationSql).toContain("add constraint time_entries_quote_subtask_entry_id_fkey");
+    expect(migrationSql).toContain("references public.quote_subtask_entries(id)");
+    expect(migrationSql).toContain("on delete cascade");
+    expect(migrationSql).toMatch(/unique \(quote_subtask_entry_id\)/);
+    expect(migrationSql).toContain("create or replace function public.copy_quote_subtask_entries_to_project");
+    expect(migrationSql).toMatch(/insert into public\.time_entries[\s\S]*quote_subtask_entry_id/);
+    expect(migrationSql).toMatch(/from public\.quote_subtask_entries qse\s+join public\.quote_subtasks qs on qs\.id = qse\.quote_subtask_id/);
+    expect(migrationSql).toContain("where qs.quote_id = p_quote_id");
+    expect(migrationSql).toContain("and qse.worker_id is not null");
+    expect(migrationSql).toContain("on conflict (quote_subtask_entry_id) do update");
+    expect(migrationSql).toContain("set project_id = excluded.project_id");
+    expect(migrationSql).toContain("started_at = excluded.started_at");
+    expect(migrationSql).toContain("description = excluded.description");
+  });
+
+  it("keeps copied quote time entries write-protected from authenticated users", () => {
+    const migrationSql = readFileSync(
+      join(process.cwd(), "supabase", "2026-04-18-copy-quote-subtask-entries-to-project.sql"),
+      "utf8",
+    );
+
+    const insertPolicyBlock = migrationSql.match(/create policy "time_entries_insert_worker_or_admin"[\s\S]*?\);/)?.[0];
+    const updatePolicyBlock = migrationSql.match(/create policy "time_entries_update_owner_or_admin"[\s\S]*?\);/)?.[0];
+    const deletePolicyBlock = migrationSql.match(/create policy "time_entries_delete_owner_or_admin"[\s\S]*?\);/)?.[0];
+
+    expect(insertPolicyBlock).toContain("quote_subtask_entry_id is null");
+    expect(updatePolicyBlock).toContain("quote_subtask_entry_id is null");
+    expect(deletePolicyBlock).toContain("quote_subtask_entry_id is null");
+    expect(migrationSql).toContain("revoke execute on function public.copy_quote_subtask_entries_to_project(uuid, uuid) from authenticated");
+  });
+
+  it("keeps the bootstrap schema aligned with quote-derived time entry safeguards", () => {
+    const schemaSql = readFileSync(
+      join(process.cwd(), "supabase", "schema.sql"),
+      "utf8",
+    );
+
+    expect(schemaSql).toContain("quote_subtask_entry_id uuid");
+    expect(schemaSql).toMatch(/constraint time_entries_quote_subtask_entry_unique unique \(quote_subtask_entry_id\)/);
+    expect(schemaSql).toContain("idx_time_entries_quote_subtask_entry_id");
+    expect(schemaSql).toMatch(/create policy "time_entries_insert_worker_or_admin"[\s\S]*quote_subtask_entry_id is null/);
+    expect(schemaSql).toMatch(/create policy "time_entries_update_owner_or_admin"[\s\S]*quote_subtask_entry_id is null/);
+    expect(schemaSql).toMatch(/create policy "time_entries_delete_owner_or_admin"[\s\S]*quote_subtask_entry_id is null/);
+    expect(schemaSql).toMatch(/if new\.ended_at is null or new\.quote_subtask_entry_id is not null then/);
+    expect(schemaSql).toContain("and te.quote_subtask_entry_id is null");
+  });
+
+  it("runs quote subtask entry copying in every conversion entry point", () => {
+    const migrationSql = readFileSync(
+      join(process.cwd(), "supabase", "2026-04-18-copy-quote-subtask-entries-to-project.sql"),
+      "utf8",
+    );
+
+    const prepaidConversionBlock = migrationSql.match(/create or replace function public\.convert_quote_to_project_core[\s\S]*?create or replace function public\.apply_postpaid_quote_conversion/)?.[0];
+    const postpaidConversionBlock = migrationSql.match(/create or replace function public\.apply_postpaid_quote_conversion[\s\S]*?create or replace function public\.apply_quote_conversion_payment/)?.[0];
+    const stripeConversionBlock = migrationSql.match(/create or replace function public\.apply_quote_conversion_payment[\s\S]*?create or replace function public\.apply_manual_quote_conversion/)?.[0];
+    const manualConversionBlock = migrationSql.match(/create or replace function public\.apply_manual_quote_conversion[\s\S]*?revoke execute on function public\.copy_quote_subtask_entries_to_project/)?.[0];
+
+    expect(prepaidConversionBlock).toBeDefined();
+    expect(prepaidConversionBlock?.match(/perform public\.copy_quote_subtask_entries_to_project/g)).toHaveLength(2);
+    expect(postpaidConversionBlock).toBeDefined();
+    expect(postpaidConversionBlock?.match(/perform public\.copy_quote_subtask_entries_to_project/g)).toHaveLength(2);
+    expect(stripeConversionBlock).toBeDefined();
+    expect(stripeConversionBlock?.match(/perform public\.copy_quote_subtask_entries_to_project/g)).toHaveLength(3);
+    expect(manualConversionBlock).toBeDefined();
+    expect(manualConversionBlock?.match(/perform public\.copy_quote_subtask_entries_to_project/g)).toHaveLength(1);
   });
 });

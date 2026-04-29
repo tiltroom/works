@@ -33,6 +33,7 @@ export interface TimeEntry {
   ended_at: string | null;
   description: string | null;
   source: "timer" | "manual";
+  quote_subtask_entry_id: string | null;
 }
 
 export interface HourPurchase {

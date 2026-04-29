@@ -57,8 +57,10 @@ create table if not exists public.time_entries (
   ended_at timestamptz,
   description text,
   source text not null check (source in ('timer', 'manual')),
+  quote_subtask_entry_id uuid,
   created_at timestamptz not null default now(),
-  constraint valid_time_range check (ended_at is null or ended_at > started_at)
+  constraint valid_time_range check (ended_at is null or ended_at > started_at),
+  constraint time_entries_quote_subtask_entry_unique unique (quote_subtask_entry_id)
 );
 
 create table if not exists public.hour_purchases (
@@ -324,12 +326,15 @@ create policy "time_entries_insert_worker_or_admin"
 on public.time_entries for insert
 to authenticated
 with check (
-  public.is_admin(auth.uid())
-  or (
-    worker_id = auth.uid()
-    and exists (
-      select 1 from public.project_workers pw
-      where pw.project_id = project_id and pw.worker_id = auth.uid()
+  quote_subtask_entry_id is null
+  and (
+    public.is_admin(auth.uid())
+    or (
+      worker_id = auth.uid()
+      and exists (
+        select 1 from public.project_workers pw
+        where pw.project_id = project_id and pw.worker_id = auth.uid()
+      )
     )
   )
 );
@@ -338,14 +343,23 @@ drop policy if exists "time_entries_update_owner_or_admin" on public.time_entrie
 create policy "time_entries_update_owner_or_admin"
 on public.time_entries for update
 to authenticated
-using (public.is_admin(auth.uid()) or worker_id = auth.uid())
-with check (public.is_admin(auth.uid()) or worker_id = auth.uid());
+using (
+  quote_subtask_entry_id is null
+  and (public.is_admin(auth.uid()) or worker_id = auth.uid())
+)
+with check (
+  quote_subtask_entry_id is null
+  and (public.is_admin(auth.uid()) or worker_id = auth.uid())
+);
 
 drop policy if exists "time_entries_delete_owner_or_admin" on public.time_entries;
 create policy "time_entries_delete_owner_or_admin"
 on public.time_entries for delete
 to authenticated
-using (public.is_admin(auth.uid()) or worker_id = auth.uid());
+using (
+  quote_subtask_entry_id is null
+  and (public.is_admin(auth.uid()) or worker_id = auth.uid())
+);
 
 drop policy if exists "hour_purchases_select_related" on public.hour_purchases;
 create policy "hour_purchases_select_related"
@@ -395,6 +409,9 @@ create index if not exists idx_projects_customer_id on public.projects (customer
 create index if not exists idx_project_workers_worker_id on public.project_workers (worker_id);
 create index if not exists idx_time_entries_project_id on public.time_entries (project_id);
 create index if not exists idx_time_entries_worker_id on public.time_entries (worker_id);
+create index if not exists idx_time_entries_quote_subtask_entry_id
+  on public.time_entries (quote_subtask_entry_id)
+  where quote_subtask_entry_id is not null;
 create index if not exists idx_hour_purchases_project_id on public.hour_purchases (project_id);
 create index if not exists idx_invitations_email on public.invitations (lower(email));
 create unique index if not exists idx_time_entries_single_open_timer
@@ -408,7 +425,7 @@ security definer
 set search_path = public
 as $$
 begin
-  if new.ended_at is null then
+  if new.ended_at is null or new.quote_subtask_entry_id is not null then
     return new;
   end if;
 
@@ -417,6 +434,7 @@ begin
     from public.time_entries te
     where te.worker_id = new.worker_id
       and te.id <> coalesce(new.id, '00000000-0000-0000-0000-000000000000'::uuid)
+      and te.quote_subtask_entry_id is null
       and te.ended_at is not null
       and tstzrange(te.started_at, te.ended_at, '[)') && tstzrange(new.started_at, new.ended_at, '[)')
   ) then

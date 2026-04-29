@@ -899,7 +899,7 @@ describe("quotes helpers", () => {
 
   it("latest quote conversion migration reuses an already linked project before creating one", () => {
     const migrationSql = readFileSync(
-      join(process.cwd(), "supabase", "2026-04-15-reuse-linked-project-during-quote-conversion.sql"),
+      join(process.cwd(), "supabase", "2026-04-18-copy-quote-subtask-entries-to-project.sql"),
       "utf8",
     );
 
@@ -922,7 +922,7 @@ describe("quotes helpers", () => {
 
   it("requires customer signature in the latest quote conversion functions", () => {
     const migrationSql = readFileSync(
-      join(process.cwd(), "supabase", "2026-04-16-require-customer-signature-for-quote-conversion.sql"),
+      join(process.cwd(), "supabase", "2026-04-18-copy-quote-subtask-entries-to-project.sql"),
       "utf8",
     );
 
