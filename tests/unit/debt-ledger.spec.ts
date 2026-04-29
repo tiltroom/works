@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 const VALID_EVENT_TYPES = ["time_entry_accrual", "time_entry_reversal", "payment_settlement"] as const;
 
@@ -39,18 +41,15 @@ describe("debt ledger invariants", () => {
     expect(outstandingDebt).toBe(0);
   });
 
-  it("idempotency: same source_id and event_type cannot create duplicate entries", () => {
-    const existingEntries = [
-      { project_id: "proj-1", source_id: "te-001", event_type: "time_entry_accrual" },
+  it("allows repeated source event types so time-entry edits can append reversal and re-accrual events", () => {
+    const ledgerEntries = [
+      { project_id: "proj-1", source_id: "te-001", event_type: "time_entry_accrual", hours: 2.5 },
+      { project_id: "proj-1", source_id: "te-001", event_type: "time_entry_reversal", hours: -2.5 },
+      { project_id: "proj-1", source_id: "te-001", event_type: "time_entry_accrual", hours: 1.0 },
     ];
-    const newEntry = { project_id: "proj-1", source_id: "te-001", event_type: "time_entry_accrual" };
-    const isDuplicate = existingEntries.some(
-      (e) =>
-        e.project_id === newEntry.project_id &&
-        e.source_id === newEntry.source_id &&
-        e.event_type === newEntry.event_type,
-    );
-    expect(isDuplicate).toBe(true);
+
+    const debt = ledgerEntries.reduce((sum, entry) => sum + entry.hours, 0);
+    expect(debt).toBe(1.0);
   });
 
   it("different event types for same source_id are allowed", () => {
@@ -90,5 +89,15 @@ describe("debt ledger invariants", () => {
     ];
     const debt = entries.reduce((sum, e) => sum + e.hours, 0);
     expect(debt).toBe(5.0);
+  });
+
+  it("drops the source/event unique constraint that blocked edited time-entry re-accrual", () => {
+    const migrationSql = readFileSync(
+      join(process.cwd(), "supabase", "2026-04-23-fix-time-entry-debt-accrual-edits.sql"),
+      "utf8",
+    );
+
+    expect(migrationSql).toContain("drop constraint if exists project_debt_ledger_source_unique");
+    expect(migrationSql).toContain("idx_project_debt_ledger_source_event");
   });
 });

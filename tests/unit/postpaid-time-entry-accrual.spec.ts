@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { BillingMode } from "@/lib/types";
 
 function computeHours(startedAt: string, endedAt: string): number {
@@ -36,6 +38,15 @@ describe("postpaid time-entry debt accrual", () => {
     const billingMode: BillingMode = "postpaid";
     const endedAt: string | null = "2026-04-09T12:00:00Z";
     const shouldAccrue = billingMode === "postpaid" && endedAt !== null;
+    expect(shouldAccrue).toBe(true);
+  });
+
+  it("stopping a running timer accrues debt once it becomes closed", () => {
+    const oldEndedAt: string | null = null;
+    const newEndedAt: string | null = "2026-04-09T12:00:00Z";
+    const billingMode: BillingMode = "postpaid";
+    const shouldAccrue = oldEndedAt === null && newEndedAt !== null && billingMode === "postpaid";
+
     expect(shouldAccrue).toBe(true);
   });
 });
@@ -85,5 +96,30 @@ describe("postpaid time-entry debt reversal", () => {
     const shouldAccrue = billingMode === "postpaid";
     expect(shouldReverse).toBe(false);
     expect(shouldAccrue).toBe(false);
+  });
+
+  it("latest debt trigger handles running-to-stopped timers and duplicate edit accruals", () => {
+    const migrationSql = readFileSync(
+      join(process.cwd(), "supabase", "2026-04-23-fix-time-entry-debt-accrual-edits.sql"),
+      "utf8",
+    );
+
+    expect(migrationSql).toContain("if old.project_id is not distinct from new.project_id");
+    expect(migrationSql).toContain("old.started_at is not distinct from new.started_at");
+    expect(migrationSql).toContain("old.ended_at is not distinct from new.ended_at");
+    expect(migrationSql).not.toContain("old.ended_at is not null and coalesce(new.ended_at, old.ended_at) is not null");
+    expect(migrationSql).toContain("'Accrual for stopped or edited time entry'");
+  });
+
+  it("runs the trigger fix before quote subtask link backfills update time entries", () => {
+    const fixMigration = "2026-04-23-fix-time-entry-debt-accrual-edits.sql";
+    const quoteSubtaskMigration = "2026-04-24-link-time-entries-to-quote-subtasks.sql";
+    const migrationSql = readFileSync(
+      join(process.cwd(), "supabase", fixMigration),
+      "utf8",
+    );
+
+    expect(fixMigration.localeCompare(quoteSubtaskMigration)).toBeLessThan(0);
+    expect(migrationSql).toContain("before 2026-04-24-link-time-entries-to-quote-subtasks.sql");
   });
 });
