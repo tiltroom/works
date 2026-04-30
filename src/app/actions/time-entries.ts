@@ -8,6 +8,7 @@ import { getLocale } from "@/lib/i18n-server";
 import { loggedHoursBetween } from "@/lib/time";
 import { OVER_ESTIMATE_ERROR_PREFIX } from "@/lib/time-entry-warnings";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { parseUtcDateTimeInput } from "@/lib/date-time";
 
 interface OpenTimeEntryRow {
   id: string;
@@ -483,17 +484,23 @@ export async function createManualTimeEntryAction(formData: FormData) {
 
   const projectId = String(formData.get("projectId") ?? "").trim();
   const quoteSubtaskId = String(formData.get("quoteSubtaskId") ?? "").trim();
-  const startedAt = String(formData.get("startedAt") ?? "").trim();
-  const endedAt = String(formData.get("endedAt") ?? "").trim();
+  const startedAtUtc = formData.get("startedAtUtc");
+  const endedAtUtc = formData.get("endedAtUtc");
   const description = String(formData.get("description") ?? "").trim();
   const confirmedOverEstimate = parseBooleanField(formData.get("confirmOverEstimate"));
 
-  if (!projectId || !startedAt || !endedAt) {
+  if (!projectId || !startedAtUtc || !endedAtUtc) {
     throw new Error(t(locale, "Project, start and end are required", "Progetto, inizio e fine sono obbligatori"));
   }
 
-  const startDate = new Date(startedAt);
-  const endDate = new Date(endedAt);
+  let startDate: Date;
+  let endDate: Date;
+  try {
+    startDate = parseUtcDateTimeInput(startedAtUtc, "Start time");
+    endDate = parseUtcDateTimeInput(endedAtUtc, "End time");
+  } catch {
+    throw new Error(t(locale, "Invalid date range", "Intervallo date non valido"));
+  }
   const now = new Date();
   if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || endDate <= startDate) {
     throw new Error(t(locale, "Invalid date range", "Intervallo date non valido"));
@@ -571,16 +578,22 @@ export async function updateTimeEntryAction(formData: FormData) {
 
   const timeEntryId = String(formData.get("timeEntryId") ?? "").trim();
   const projectId = String(formData.get("projectId") ?? "").trim();
-  const startedAt = String(formData.get("startedAt") ?? "").trim();
-  const endedAt = String(formData.get("endedAt") ?? "").trim();
+  const startedAtUtc = formData.get("startedAtUtc");
+  const endedAtUtc = formData.get("endedAtUtc");
   const description = String(formData.get("description") ?? "").trim();
 
-  if (!timeEntryId || !projectId || !startedAt || !endedAt) {
+  if (!timeEntryId || !projectId || !startedAtUtc || !endedAtUtc) {
     throw new Error(t(locale, "Time entry id, project, start, and end are required", "ID voce tempo, progetto, inizio e fine sono obbligatori"));
   }
 
-  const startDate = new Date(startedAt);
-  const endDate = new Date(endedAt);
+  let startDate: Date;
+  let endDate: Date;
+  try {
+    startDate = parseUtcDateTimeInput(startedAtUtc, "Start time");
+    endDate = parseUtcDateTimeInput(endedAtUtc, "End time");
+  } catch {
+    throw new Error(t(locale, "Invalid date range", "Intervallo date non valido"));
+  }
   if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || endDate <= startDate) {
     throw new Error(t(locale, "Invalid date range", "Intervallo date non valido"));
   }
