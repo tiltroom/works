@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ViewportModal, ViewportModalPanel } from "@/components/ui/viewport-modal";
 import { ModalActionForm, ModalSubmitButton } from "@/components/ui/modal-action-form";
+import { DatetimeLocalInput } from "@/components/worker/datetime-local-form";
 
 interface EditProjectOption {
   id: string;
@@ -12,9 +13,9 @@ interface EditProjectOption {
 interface EditTimeEntryModalProps {
   timeEntryId: string;
   projectId: string;
-  startedAt: string;
-  endedAt: string;
-  maxEndedAt: string;
+  startedAtUtc: string;
+  endedAtUtc: string;
+  maxEndedAtUtc: string;
   description: string;
   projectOptions: EditProjectOption[];
   closeHref: string;
@@ -38,9 +39,9 @@ interface EditTimeEntryModalProps {
 export function EditTimeEntryModal({
   timeEntryId,
   projectId,
-  startedAt,
-  endedAt,
-  maxEndedAt,
+  startedAtUtc,
+  endedAtUtc,
+  maxEndedAtUtc,
   description,
   projectOptions,
   closeHref,
@@ -67,6 +68,8 @@ export function EditTimeEntryModal({
           genericErrorMessage={labels.genericErrorMessage}
         >
           <input type="hidden" name="timeEntryId" value={timeEntryId} />
+          <input type="hidden" name="startedAtUtc" />
+          <input type="hidden" name="endedAtUtc" />
 
           <div className="space-y-1.5 md:col-span-2">
             <label htmlFor="modal-time-project" className="text-sm font-medium text-foreground">
@@ -91,12 +94,11 @@ export function EditTimeEntryModal({
             <label htmlFor="modal-time-started" className="text-sm font-medium text-foreground">
               {labels.startTime}
             </label>
-            <input
+            <DatetimeLocalInput
               id="modal-time-started"
-              name="startedAt"
-              type="datetime-local"
+              name="startedAtLocal"
               required
-              defaultValue={startedAt}
+              defaultUtcValue={startedAtUtc}
               className="w-full rounded-lg border border-input bg-background/70 px-4 py-2.5 text-foreground focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
             />
           </div>
@@ -105,14 +107,12 @@ export function EditTimeEntryModal({
             <label htmlFor="modal-time-ended" className="text-sm font-medium text-foreground">
               {labels.endTime}
             </label>
-            <input
+            <DatetimeLocalInput
               id="modal-time-ended"
-              name="endedAt"
-              type="datetime-local"
+              name="endedAtLocal"
               required
-              defaultValue={endedAt}
-              min={startedAt || undefined}
-              max={maxEndedAt}
+              defaultUtcValue={endedAtUtc}
+              maxUtcValue={maxEndedAtUtc}
               className="w-full rounded-lg border border-input bg-background/70 px-4 py-2.5 text-foreground focus:border-transparent focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
             />
           </div>

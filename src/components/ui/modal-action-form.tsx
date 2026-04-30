@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useFormStatus } from "react-dom";
 import { DismissibleToast } from "@/components/ui/dismissible-toast";
 import { withQueryToast } from "@/lib/query-toast";
+import { datetimeLocalValueToUtcIso } from "@/lib/date-time";
 
 interface ModalActionFormProps extends Omit<ComponentPropsWithoutRef<"form">, "action" | "children"> {
   action: (formData: FormData) => Promise<void>;
@@ -43,6 +44,19 @@ export function ModalActionForm({
       setErrorMessage(null);
 
       try {
+        if (formData.has("startedAtLocal") || formData.has("endedAtLocal")) {
+          const startedAtLocal = formData.get("startedAtLocal");
+          const endedAtLocal = formData.get("endedAtLocal");
+
+          if (typeof startedAtLocal === "string" && startedAtLocal.trim()) {
+            formData.set("startedAtUtc", datetimeLocalValueToUtcIso(startedAtLocal, "Start time"));
+          }
+
+          if (typeof endedAtLocal === "string" && endedAtLocal.trim()) {
+            formData.set("endedAtUtc", datetimeLocalValueToUtcIso(endedAtLocal, "End time"));
+          }
+        }
+
         await action(formData);
         router.replace(withQueryToast(successRedirectHref, "success", successMessage), { scroll: false });
         router.refresh();
