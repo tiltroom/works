@@ -269,11 +269,11 @@ export function SubtaskTimeControls({
   };
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="min-w-0 space-y-3">
+      <div className="flex min-w-0 flex-col gap-2 min-[420px]:flex-row min-[420px]:flex-wrap min-[420px]:items-center">
         {isRunningThisSubtask ? (
           <>
-            <span className="inline-flex items-center gap-2 rounded-lg border border-brand-500/25 bg-brand-500/10 px-3 py-2 text-xs font-medium text-brand-700 dark:text-brand-300">
+            <span className="inline-flex w-full min-w-0 items-center justify-center gap-2 rounded-lg border border-brand-500/25 bg-brand-500/10 px-3 py-2 text-xs font-medium text-brand-700 min-[420px]:w-auto dark:text-brand-300">
               <span className="h-2 w-2 rounded-full bg-brand-500 animate-pulse" />
               {elapsed} {labels.elapsed}
             </span>
@@ -281,7 +281,7 @@ export function SubtaskTimeControls({
               type="button"
               onClick={() => handleStopTimer(false)}
               disabled={isPending || pendingAction === "timer"}
-              className="inline-flex items-center justify-center rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-700 transition-colors hover:bg-red-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-300"
+              className="inline-flex w-full items-center justify-center rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-700 transition-colors hover:bg-red-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-60 min-[420px]:w-auto dark:text-red-300"
             >
               {pendingAction === "timer" ? labels.saving : labels.stopTimer}
             </button>
@@ -291,14 +291,14 @@ export function SubtaskTimeControls({
             type="button"
             onClick={handleStartTimer}
             disabled={isPending || pendingAction === "timer" || hasOtherRunningTimer}
-            className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60 min-[420px]:w-auto"
           >
             {pendingAction === "timer" ? labels.saving : labels.startTimer}
           </button>
         )}
       </div>
 
-      <form id={`manual-log-${quoteSubtaskId}`} action={handleManualSubmit} className="grid gap-3 rounded-xl border border-border/60 bg-background/45 p-3 md:grid-cols-2">
+      <form id={`manual-log-${quoteSubtaskId}`} action={handleManualSubmit} className="grid min-w-0 gap-3 rounded-xl border border-border/60 bg-background/45 p-3 md:grid-cols-2">
         <input type="hidden" name="projectId" value={projectId} />
         <input type="hidden" name="quoteSubtaskId" value={quoteSubtaskId} />
         <div className="space-y-1.5">

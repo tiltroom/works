@@ -14,13 +14,13 @@ export function SubtaskTimeControlsReveal({ showLabel, hideLabel, hint, children
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
-    <div className="border-t border-border/60 bg-card/25 px-3 py-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs text-muted-foreground">{hint}</p>
+    <div className="min-w-0 border-t border-border/60 bg-card/25 px-3 py-3 sm:px-4">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="min-w-0 flex-1 text-xs leading-5 text-muted-foreground">{hint}</p>
         <button
           type="button"
           onClick={() => setIsExpanded((current) => !current)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background/65 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-border bg-background/65 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground sm:w-auto"
         >
           {isExpanded ? (
             <>
@@ -40,7 +40,7 @@ export function SubtaskTimeControlsReveal({ showLabel, hideLabel, hint, children
         </button>
       </div>
 
-      {isExpanded ? <div className="mt-3">{children}</div> : null}
+      {isExpanded ? <div className="mt-3 min-w-0">{children}</div> : null}
     </div>
   );
 }
