@@ -1,4 +1,6 @@
 import { createManualTimeEntryAction, deleteTimeEntryAction, startTimerAction, stopTimerAction, updateTimeEntryAction } from "@/app/actions/time-entries";
+import { LocalDate, LocalTime } from "@/components/local-date-time";
+import { DatetimeLocalForm, DatetimeLocalInput } from "@/components/worker/datetime-local-form";
 import { EditTimeEntryModal } from "@/components/worker/edit-time-entry-modal";
 import { WorkerQueryToast } from "@/components/worker/worker-query-toast";
 import { ModalActionForm } from "@/components/ui/modal-action-form";
@@ -13,6 +15,7 @@ import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { localeTag, t } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n-server";
+import { parseOptionalUtcDateTime } from "@/lib/date-time";
 
 export const dynamic = "force-dynamic";
 
@@ -49,13 +52,6 @@ interface QuoteSubtaskRow {
   title: string;
 }
 
-function formatForDatetimeLocal(value: string) {
-  const date = new Date(value);
-  const offset = date.getTimezoneOffset() * 60000;
-  const local = new Date(date.getTime() - offset);
-  return local.toISOString().slice(0, 16);
-}
-
 const panelClass = "rounded-2xl border border-border bg-card/80 backdrop-blur-sm";
 const tableShellClass = "overflow-hidden rounded-xl border border-border/70 bg-background/45";
 const tableHeadClass = "border-b border-border bg-muted/50 text-xs uppercase text-muted-foreground";
@@ -82,10 +78,8 @@ export default async function WorkerPage({
   const toastTypeParam = params.toast?.trim();
   const toastMessageParam = params.toastMessage?.trim();
 
-  const fromDate = fromParam ? new Date(fromParam) : null;
-  const toDate = toParam ? new Date(toParam) : null;
-  const validFromDate = fromDate && !Number.isNaN(fromDate.getTime()) ? fromDate : null;
-  const validToDate = toDate && !Number.isNaN(toDate.getTime()) ? toDate : null;
+  const validFromDate = parseOptionalUtcDateTime(fromParam);
+  const validToDate = parseOptionalUtcDateTime(toParam);
 
   let timeEntriesQuery = supabase
     .from("time_entries")
@@ -196,9 +190,7 @@ export default async function WorkerPage({
     return suffix ? `/worker?${suffix}` : "/worker";
   };
 
-  const noDateText = formatForDatetimeLocal(new Date().toISOString());
-  const fromInputValue = validFromDate ? formatForDatetimeLocal(validFromDate.toISOString()) : "";
-  const toInputValue = validToDate ? formatForDatetimeLocal(validToDate.toISOString()) : "";
+  const nowUtc = new Date().toISOString();
   const editingTimeEntry = (editingEntryFromDb ?? null) as TimeEntryRow | null;
   const deletingTimeEntry = (deletingEntryFromDb ?? null) as TimeEntryRow | null;
   const activeEditEntry = editingTimeEntry && !editingTimeEntry.ended_at ? null : editingTimeEntry;
@@ -388,7 +380,7 @@ export default async function WorkerPage({
                 </div>
             </div>
 
-            <form className="mb-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" method="GET">
+            <DatetimeLocalForm className="mb-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4" method="GET">
               <div className="space-y-1.5">
                 <label htmlFor="projectId" className="text-xs font-medium text-muted-foreground">{t(locale, "Project", "Progetto")}</label>
                 <select
@@ -407,23 +399,21 @@ export default async function WorkerPage({
               </div>
               <div className="space-y-1.5">
                 <label htmlFor="from" className="text-xs font-medium text-muted-foreground">{t(locale, "From", "Da")}</label>
-                <input
+                <input type="hidden" name="from" defaultValue={fromParam ?? ""} />
+                <DatetimeLocalInput
                   id="from"
-                  name="from"
-                  type="datetime-local"
-                  defaultValue={fromInputValue}
+                  name="fromLocal"
+                  defaultUtcValue={validFromDate ? validFromDate.toISOString() : null}
                   className={compactInputClass}
                 />
               </div>
               <div className="space-y-1.5">
                 <label htmlFor="to" className="text-xs font-medium text-muted-foreground">{t(locale, "To", "A")}</label>
-                <input
+                <input type="hidden" name="to" defaultValue={toParam ?? ""} />
+                <DatetimeLocalInput
                   id="to"
-                  name="to"
-                  type="datetime-local"
-                  defaultValue={toInputValue}
-                  min={fromInputValue || undefined}
-                  max={noDateText}
+                  name="toLocal"
+                  defaultUtcValue={validToDate ? validToDate.toISOString() : null}
                   className={compactInputClass}
                 />
               </div>
@@ -432,7 +422,7 @@ export default async function WorkerPage({
                   {t(locale, "Apply Filters", "Applica filtri")}
                 </button>
               </div>
-            </form>
+            </DatetimeLocalForm>
             
             <div className={tableShellClass}>
               <div className="overflow-x-auto">
@@ -460,8 +450,8 @@ export default async function WorkerPage({
                             <td className="px-4 py-3 font-medium text-foreground">{entry.projects?.name || t(locale, "Unknown", "Sconosciuto")}</td>
                             <td className="px-4 py-3">
                               <div className="flex flex-col gap-1">
-                                <span className="text-foreground/90">{new Date(entry.started_at).toLocaleTimeString(tag, {hour: '2-digit', minute:'2-digit'})}</span>
-                                <span className="text-xs text-muted-foreground">{new Date(entry.started_at).toLocaleDateString(tag)}</span>
+                                <span className="text-foreground/90"><LocalTime value={entry.started_at} tag={tag} options={{hour: '2-digit', minute:'2-digit'}} /></span>
+                                <span className="text-xs text-muted-foreground"><LocalDate value={entry.started_at} tag={tag} /></span>
                                 <span className="mt-0.5 text-xs text-muted-foreground/80">{t(locale, "to", "a")}</span>
                                 {isRunning ? (
                                   <span className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 dark:text-brand-400">
@@ -470,7 +460,7 @@ export default async function WorkerPage({
                                   </span>
                                 ) : (
                                   <span className="text-muted-foreground">
-                                    {entry.ended_at ? new Date(entry.ended_at).toLocaleTimeString(tag, {hour: '2-digit', minute:'2-digit'}) : "-"}
+                                    <LocalTime value={entry.ended_at} tag={tag} options={{hour: '2-digit', minute:'2-digit'}} fallback="-" />
                                   </span>
                                 )}
                               </div>
@@ -568,7 +558,7 @@ export default async function WorkerPage({
               </svg>
               {t(locale, "Manual Entry", "Inserimento manuale")}
             </h2>
-            <form action={createManualTimeEntryAction} className="grid gap-4">
+            <DatetimeLocalForm action={createManualTimeEntryAction} className="grid gap-4">
               <div className="space-y-1.5">
                 <label htmlFor="manual-projectId" className="text-sm font-medium text-foreground">{t(locale, "Project", "Progetto")}</label>
                 <select id="manual-projectId" name="projectId" required className={`${compactInputClass} appearance-none focus:ring-amber-500`}>
@@ -608,11 +598,13 @@ export default async function WorkerPage({
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <label htmlFor="startedAt" className="text-xs font-medium text-muted-foreground">{t(locale, "Start Time", "Ora inizio")}</label>
-                   <input id="startedAt" name="startedAt" type="datetime-local" required className={`${compactInputClass} focus:ring-amber-500`} />
+                   <input type="hidden" name="startedAtUtc" />
+                   <DatetimeLocalInput id="startedAt" name="startedAtLocal" required className={`${compactInputClass} focus:ring-amber-500`} />
                 </div>
                 <div className="space-y-1.5">
                   <label htmlFor="endedAt" className="text-xs font-medium text-muted-foreground">{t(locale, "End Time", "Ora fine")}</label>
-                   <input id="endedAt" name="endedAt" type="datetime-local" required className={`${compactInputClass} focus:ring-amber-500`} />
+                   <input type="hidden" name="endedAtUtc" />
+                   <DatetimeLocalInput id="endedAt" name="endedAtLocal" required className={`${compactInputClass} focus:ring-amber-500`} />
                 </div>
               </div>
               
@@ -630,7 +622,7 @@ export default async function WorkerPage({
               <button className="mt-2 w-full rounded-lg border border-border bg-background/70 px-4 py-3 font-medium text-foreground transition-all hover:bg-accent hover:text-accent-foreground">
                 {t(locale, "Log Past Hours", "Registra ore passate")}
               </button>
-            </form>
+            </DatetimeLocalForm>
           </section>
         </div>
 
@@ -638,9 +630,9 @@ export default async function WorkerPage({
           <EditTimeEntryModal
             timeEntryId={activeEditEntry.id}
             projectId={activeEditEntry.project_id}
-            startedAt={formatForDatetimeLocal(activeEditEntry.started_at)}
-            endedAt={formatForDatetimeLocal(activeEditEntry.ended_at || noDateText)}
-            maxEndedAt={noDateText}
+            startedAtUtc={activeEditEntry.started_at}
+            endedAtUtc={activeEditEntry.ended_at || nowUtc}
+            maxEndedAtUtc={nowUtc}
             description={activeEditEntry.description ?? ""}
             projectOptions={editProjectOptions}
             closeHref={withBaseFilterParams({})}
