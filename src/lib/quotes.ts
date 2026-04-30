@@ -1,5 +1,6 @@
 import type { JSONContent } from "@tiptap/core";
 import type { Locale } from "@/lib/i18n";
+import { toUtcIsoString } from "@/lib/date-time";
 
 export type QuoteStatus = "draft" | "signed" | "converted";
 
@@ -152,6 +153,30 @@ function asNullableString(value: unknown) {
   return typeof value === "string" ? value : null;
 }
 
+function asUtcString(value: unknown, fallback = "") {
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (typeof value !== "string") {
+    return fallback;
+  }
+
+  return toUtcIsoString(value) ?? fallback;
+}
+
+function asNullableUtcString(value: unknown) {
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  return toUtcIsoString(value);
+}
+
 function asNumber(value: unknown, fallback = 0) {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
@@ -231,25 +256,25 @@ export function parseQuoteRecord(row: RawRecord): QuoteRecord {
     totalEstimatedHours: asNumber(row.total_estimated_hours),
     totalLoggedHours: asNumber(row.total_logged_hours),
     signedByName: asNullableString(row.signed_by_name),
-    signedAt: asNullableString(row.signed_at),
+    signedAt: asNullableUtcString(row.signed_at),
     signedByUserId: asNullableString(row.signed_by_user_id),
     customerSignedByName: asNullableString(row.customer_signed_by_name),
-    customerSignedAt: asNullableString(row.customer_signed_at),
+    customerSignedAt: asNullableUtcString(row.customer_signed_at),
     customerSignedByUserId: asNullableString(row.customer_signed_by_user_id),
     linkedProjectId,
     linkedProjectName,
     projectId: linkedProjectId,
     projectName: linkedProjectName,
-    convertedAt: asNullableString(row.converted_at),
+    convertedAt: asNullableUtcString(row.converted_at),
     createdBy: asNullableString(row.created_by),
-    createdAt: asString(row.created_at),
-    updatedAt: asString(row.updated_at),
+    createdAt: asUtcString(row.created_at),
+    updatedAt: asUtcString(row.updated_at),
     scopeOfWork: asNullableString(row.content_html),
     signatureName: asNullableString(row.signed_by_name),
     adminNotes: asNullableString(row.admin_notes),
-    confirmedAt: asNullableString(row.confirmed_at),
-    conversionRequestedAt: asNullableString(row.conversion_requested_at),
-    prepaymentRequestedAt: asNullableString(row.prepayment_requested_at),
+    confirmedAt: asNullableUtcString(row.confirmed_at),
+    conversionRequestedAt: asNullableUtcString(row.conversion_requested_at),
+    prepaymentRequestedAt: asNullableUtcString(row.prepayment_requested_at),
   };
 }
 
@@ -258,7 +283,7 @@ export function parseQuoteWorkerRecord(row: RawRecord): QuoteWorkerRecord {
     quoteId: asString(row.quote_id),
     workerId: asString(row.worker_id),
     workerName: asNullableString(row.worker_name),
-    assignedAt: asString(row.assigned_at),
+    assignedAt: asUtcString(row.assigned_at),
     assignedBy: asNullableString(row.assigned_by),
   };
 }
@@ -272,8 +297,8 @@ export function parseQuoteSubtaskRecord(row: RawRecord): QuoteSubtaskRecord {
     estimatedHours: asNumber(row.estimated_hours),
     sortOrder: asNumber(row.sort_order),
     createdBy: asNullableString(row.created_by),
-    createdAt: asString(row.created_at),
-    updatedAt: asString(row.updated_at),
+    createdAt: asUtcString(row.created_at),
+    updatedAt: asUtcString(row.updated_at),
   };
 }
 
@@ -285,8 +310,8 @@ export function parseQuoteSubtaskEntryRecord(row: RawRecord): QuoteSubtaskEntryR
     workerName: asNullableString(row.worker_name),
     loggedHours: asNumber(row.logged_hours),
     note: asNullableString(row.note),
-    createdAt: asString(row.created_at),
-    updatedAt: asString(row.updated_at, asString(row.created_at)),
+    createdAt: asUtcString(row.created_at),
+    updatedAt: asUtcString(row.updated_at, asUtcString(row.created_at)),
   };
 }
 
@@ -305,9 +330,9 @@ export function parseQuoteCommentRecord(row: RawRecord): QuoteCommentRecord {
     commentJson: asJsonContent(row.comment_json),
     originalCommentHtml: asNullableString(row.original_comment_html),
     originalCommentJson: asJsonContent(row.original_comment_json),
-    createdAt: asString(row.created_at),
-    updatedAt: asString(row.updated_at, asString(row.created_at)),
-    editedAt: asNullableString(row.edited_at),
+    createdAt: asUtcString(row.created_at),
+    updatedAt: asUtcString(row.updated_at, asUtcString(row.created_at)),
+    editedAt: asNullableUtcString(row.edited_at),
     workerId: authorRole === "worker" ? authorId : null,
     workerName: authorRole === "worker" ? asNullableString(row.author_name) : null,
     body: commentHtml ?? "",
@@ -329,9 +354,9 @@ export function parseProjectDiscussionMessageRecord(row: RawRecord): ProjectDisc
     messageJson: asJsonContent(row.message_json),
     originalMessageHtml: asNullableString(row.original_message_html),
     originalMessageJson: asJsonContent(row.original_message_json),
-    createdAt: asString(row.created_at),
-    updatedAt: asString(row.updated_at, asString(row.created_at)),
-    editedAt: asNullableString(row.edited_at),
+    createdAt: asUtcString(row.created_at),
+    updatedAt: asUtcString(row.updated_at, asUtcString(row.created_at)),
+    editedAt: asNullableUtcString(row.edited_at),
     workerId: authorRole === "worker" ? authorId : null,
     workerName: authorRole === "worker" ? asNullableString(row.author_name) : null,
     body: messageHtml ?? "",
@@ -347,7 +372,7 @@ export function parseQuoteSubtaskEstimateRecord(row: RawRecord): QuoteSubtaskEst
     title: asString(row.title),
     note: asNullableString(row.description),
     estimatedHours: asNumber(row.estimated_hours),
-    createdAt: asString(row.created_at),
+    createdAt: asUtcString(row.created_at),
   };
 }
 
@@ -360,7 +385,7 @@ export function parseQuoteLoggedHourRecord(row: RawRecord): QuoteLoggedHourRecor
     title: asString(row.title, "Logged entry"),
     note: asNullableString(row.note),
     hoursLogged: asNumber(row.logged_hours),
-    createdAt: asString(row.created_at),
+    createdAt: asUtcString(row.created_at),
   };
 }
 
@@ -375,8 +400,8 @@ export function parseQuotePrepaymentSessionRecord(row: RawRecord): QuotePrepayme
     currency: asString(row.currency),
     status: row.status === "paid" ? "paid" : "pending",
     stripeEventId: asNullableString(row.stripe_event_id),
-    paidAt: asNullableString(row.paid_at),
-    createdAt: asString(row.created_at),
+    paidAt: asNullableUtcString(row.paid_at),
+    createdAt: asUtcString(row.created_at),
   };
 }
 
