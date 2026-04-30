@@ -11,6 +11,7 @@ import { quotesPrimaryButtonClass } from "@/components/quotes";
 import { requireRole } from "@/lib/auth";
 import { localeTag, t } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n-server";
+import { outstandingDebtFromBilledHours, sumPurchasedHours } from "@/lib/project-hours";
 import { createClient } from "@/lib/supabase/server";
 import { hoursToMinutesWithHoursDisplay, loggedHoursBetween } from "@/lib/time";
 
@@ -23,11 +24,6 @@ interface CustomerProjectRow {
   assigned_hours: number;
   billing_mode: string | null;
   customer_id: string;
-}
-
-interface BillingSummaryRow {
-  project_id: string;
-  outstanding_debt_hours: number;
 }
 
 interface TimeEntryRow {
@@ -75,27 +71,24 @@ export default async function CustomerProjectDetailPage({
   const routeParams = await Promise.resolve(params);
   const projectId = routeParams.projectId?.trim();
 
-  const [{ data: project }, { data: billingSummary }, { data: timeEntries }, { data: purchases }] = await Promise.all([
+  const [{ data: project }, { data: timeEntries }, { data: purchases }] = await Promise.all([
     supabase
       .from("projects")
       .select("id,name,description,assigned_hours,billing_mode,customer_id")
       .eq("id", projectId)
       .eq("customer_id", profile.id)
       .maybeSingle<CustomerProjectRow>(),
-    supabase.from("project_billing_summary").select("project_id,outstanding_debt_hours").eq("project_id", projectId).maybeSingle<BillingSummaryRow>(),
     supabase
       .from("time_entries")
       .select("id,worker_id,started_at,ended_at,description")
       .eq("project_id", projectId)
-      .order("started_at", { ascending: false })
-      .limit(12),
+      .order("started_at", { ascending: false }),
     supabase
       .from("hour_purchases")
       .select("id,hours_added,amount_cents,currency,payment_method,admin_comment,created_at")
       .eq("customer_id", profile.id)
       .eq("project_id", projectId)
-      .order("created_at", { ascending: false })
-      .limit(6),
+      .order("created_at", { ascending: false }),
   ]);
 
   if (!project) {
@@ -115,11 +108,12 @@ export default async function CustomerProjectDetailPage({
   const discussionFormData = new FormData();
   discussionFormData.set("projectId", project.id);
   const messages = await loadProjectDiscussionAction(discussionFormData);
+  const projectPurchases = (purchases ?? []) as PurchaseRow[];
   const usedHours = totalUsedHours(projectEntries);
   const assignedHours = Number(project.assigned_hours ?? 0);
+  const billedHours = sumPurchasedHours(projectPurchases);
   const remainingHours = Math.max(0, assignedHours - usedHours);
-  const outstandingDebt = Number(billingSummary?.outstanding_debt_hours ?? 0);
-  const projectPurchases = (purchases ?? []) as PurchaseRow[];
+  const outstandingDebt = outstandingDebtFromBilledHours(usedHours, billedHours);
 
   return (
     <ProjectDetailShell
@@ -135,9 +129,14 @@ export default async function CustomerProjectDetailPage({
         { label: t(locale, "Assigned hours", "Ore assegnate"), value: hoursToMinutesWithHoursDisplay(assignedHours), tone: "accent" },
         { label: t(locale, "Used hours", "Ore usate"), value: hoursToMinutesWithHoursDisplay(usedHours) },
         {
-          label: project.billing_mode === "postpaid" ? t(locale, "Outstanding debt", "Debito residuo") : t(locale, "Remaining hours", "Ore rimanenti"),
-          value: hoursToMinutesWithHoursDisplay(project.billing_mode === "postpaid" ? outstandingDebt : remainingHours),
-          tone: project.billing_mode === "postpaid" && outstandingDebt > 0 ? "danger" : remainingHours > 0 ? "success" : "danger",
+          label: t(locale, "Remaining hours", "Ore rimanenti"),
+          value: hoursToMinutesWithHoursDisplay(remainingHours),
+          tone: remainingHours > 0 ? "success" : "danger",
+        },
+        {
+          label: t(locale, "Outstanding debt", "Debito residuo"),
+          value: hoursToMinutesWithHoursDisplay(outstandingDebt),
+          tone: outstandingDebt > 0 ? "danger" : "success",
         },
         { label: t(locale, "Discussion messages", "Messaggi discussione"), value: String(messages.length) },
       ]}

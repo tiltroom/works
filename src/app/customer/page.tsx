@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { localeTag, t } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n-server";
+import { outstandingDebtFromBilledHours, sumPurchasedHours } from "@/lib/project-hours";
 import { RecentActivityToggle } from "./recent-activity-toggle";
 
 export const dynamic = "force-dynamic";
@@ -16,11 +17,6 @@ interface CustomerProjectRow {
   name: string;
   assigned_hours: number;
   billing_mode?: string | null;
-}
-
-interface BillingSummaryRow {
-  project_id: string;
-  outstanding_debt_hours: number;
 }
 
 interface ProjectTimeRow {
@@ -90,23 +86,12 @@ export default async function CustomerPage() {
   ]);
 
   const projectIds = (projects ?? []).map((project) => project.id);
-
-  let billingSummaries: BillingSummaryRow[] = [];
-  if (projectIds.length > 0) {
-    const { data: bsData } = await supabase.from("project_billing_summary").select("project_id,outstanding_debt_hours").in("project_id", projectIds);
-    billingSummaries = (bsData ?? []) as BillingSummaryRow[];
-  }
-
-  const debtByProjectId = new Map<string, number>(
-    billingSummaries.map((s) => [s.project_id, Number(s.outstanding_debt_hours ?? 0)]),
-  );
   const { data: timeEntries } = projectIds.length
     ? await supabase
         .from("time_entries")
         .select("id,project_id,started_at,ended_at,description,worker_id")
         .in("project_id", projectIds)
         .order("started_at", { ascending: false })
-        .limit(50)
     : { data: [] };
 
   const customerProjects = (projects ?? []) as CustomerProjectRow[];
@@ -119,6 +104,13 @@ export default async function CustomerPage() {
     ((workerProfiles ?? []) as WorkerProfileRow[]).map((worker) => [worker.id, worker.full_name?.trim() || null]),
   );
   const billingRows = (purchases ?? []) as PurchaseRow[];
+  const purchasesByProjectId = billingRows.reduce<Map<string, PurchaseRow[]>>((map, purchase) => {
+    const existingPurchases = map.get(purchase.project_id) ?? [];
+    existingPurchases.push(purchase);
+    map.set(purchase.project_id, existingPurchases);
+
+    return map;
+  }, new Map());
 
   return (
     <main className="w-full">
@@ -158,13 +150,15 @@ export default async function CustomerPage() {
           ) : (
             customerProjects.map((project) => {
               const projectEntries = entries.filter((entry) => entry.project_id === project.id);
+              const projectPurchases = purchasesByProjectId.get(project.id) ?? [];
               const used = totalUsedHours(projectEntries);
               const totalAssigned = Number(project.assigned_hours);
+              const billedHours = sumPurchasedHours(projectPurchases);
               const remaining = Math.max(0, totalAssigned - used);
               const usagePercent = totalAssigned > 0 ? Math.min(100, (used / totalAssigned) * 100) : 0;
               const billingMode = project.billing_mode ?? null;
               const isPostPaid = billingMode === "postpaid";
-              const outstandingDebt = debtByProjectId.get(project.id) ?? 0;
+              const outstandingDebt = outstandingDebtFromBilledHours(used, billedHours);
               
               const isLowHours = !isPostPaid && remaining < 5 && remaining > 0;
               const isOutOfHours = !isPostPaid && remaining <= 0;
@@ -185,7 +179,7 @@ export default async function CustomerPage() {
                         </Link>
                       </div>
                       
-                      <div className={`grid gap-4 mb-4 ${isPostPaid && outstandingDebt > 0 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+                      <div className={`grid gap-4 mb-4 ${outstandingDebt > 0 ? 'grid-cols-4' : 'grid-cols-3'}`}>
                         <div className={metricCardClass}>
                           <p className="mb-1 text-sm text-muted-foreground">{t(locale, "Assigned", "Assegnate")}</p>
                           <p className="text-xl font-semibold text-foreground">{hoursToMinutesWithHoursDisplay(totalAssigned)}</p>
@@ -200,7 +194,7 @@ export default async function CustomerPage() {
                             {hoursToMinutesWithHoursDisplay(remaining)}
                           </p>
                         </div>
-                        {isPostPaid && outstandingDebt > 0 ? (
+                        {outstandingDebt > 0 ? (
                           <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-4">
                             <p className="mb-1 text-sm text-muted-foreground">{t(locale, "Outstanding debt", "Debito residuo")}</p>
                             <p className="text-xl font-semibold text-orange-700 dark:text-orange-300">{hoursToMinutesWithHoursDisplay(outstandingDebt)}</p>
