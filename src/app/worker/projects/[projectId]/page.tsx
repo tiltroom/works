@@ -10,10 +10,13 @@ import { ProjectDetailShell, ProjectDiscussionPanel, QuotesSectionCard } from "@
 import { quotesSecondaryButtonClass } from "@/components/quotes";
 import { SubtaskTimeControls } from "@/components/worker/subtask-time-controls";
 import { SubtaskTimeControlsReveal } from "@/components/worker/subtask-time-controls-reveal";
+import { LoggedActivityList } from "@/components/worker/logged-activity-list";
+import { LoggedActivitySection } from "@/components/worker/logged-activity-section";
 import { requireRole } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { localeTag, t } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n-server";
+import { assignedHoursFromQuoteEstimateOrSubtasks, parseProjectHours } from "@/lib/project-hours";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { hoursToMinutesWithHoursDisplay, loggedHoursBetween } from "@/lib/time";
@@ -24,7 +27,6 @@ interface WorkerProjectRow {
   id: string;
   name: string;
   description: string | null;
-  assigned_hours: number;
   billing_mode: string | null;
   customer_id: string;
 }
@@ -69,6 +71,8 @@ interface QuoteSubtaskTimeEntryRow {
   quote_subtask_id: string | null;
   started_at: string;
   ended_at: string | null;
+  description: string | null;
+  source: "timer" | "manual";
 }
 
 function totalUsedHours(entries: TimeEntryRow[]) {
@@ -81,13 +85,12 @@ function totalUsedHours(entries: TimeEntryRow[]) {
   }, 0);
 }
 
-function parseHours(value: number | string | null | undefined) {
-  const parsed = Number(value ?? 0);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
 function formatCompactHours(hours: number) {
   return `${hours.toFixed(2)}h`;
+}
+
+function normalizeTimeEntrySource(source: unknown): "timer" | "manual" {
+  return source === "timer" ? "timer" : "manual";
 }
 
 function completedLoggedHours(entries: Array<{ started_at: string; ended_at: string | null }>) {
@@ -166,7 +169,7 @@ export default async function WorkerProjectDetailPage({
   const [{ data: project }, { data: billingSummary }, { data: timeEntries }, { data: runningFromDb }, { data: linkedQuoteFromDb }] = await Promise.all([
     supabase
       .from("projects")
-      .select("id,name,description,assigned_hours,billing_mode,customer_id")
+      .select("id,name,description,billing_mode,customer_id")
       .eq("id", projectId)
       .maybeSingle<WorkerProjectRow>(),
     supabase.from("project_billing_summary").select("project_id,outstanding_debt_hours").eq("project_id", projectId).maybeSingle<BillingSummaryRow>(),
@@ -220,25 +223,30 @@ export default async function WorkerProjectDetailPage({
     if (subtaskIds.length > 0) {
       const { data: directTimeEntries, error: directTimeEntriesError } = await supabase
         .from("time_entries")
-        .select("id,quote_subtask_id,started_at,ended_at")
+        .select("id,quote_subtask_id,started_at,ended_at,description,source")
         .eq("project_id", project.id)
-        .in("quote_subtask_id", subtaskIds);
+        .in("quote_subtask_id", subtaskIds)
+        .order("started_at", { ascending: false });
 
       if (directTimeEntriesError) {
         const { data: generatedTimeEntries } = await supabase
           .from("time_entries")
-          .select("id,started_at,ended_at,quote_subtask_entry_id,quote_subtask_entries(quote_subtask_id)")
+          .select("id,started_at,ended_at,description,source,quote_subtask_entry_id,quote_subtask_entries(quote_subtask_id)")
           .eq("project_id", project.id)
-          .not("quote_subtask_entry_id", "is", null);
+          .not("quote_subtask_entry_id", "is", null)
+          .order("started_at", { ascending: false });
 
         quoteSubtaskTimeEntries = (generatedTimeEntries ?? []).map((entry) => {
           const relatedEntry = entry.quote_subtask_entries as { quote_subtask_id?: string | null } | { quote_subtask_id?: string | null }[] | null;
           const related = Array.isArray(relatedEntry) ? relatedEntry[0] : relatedEntry;
+          const source = normalizeTimeEntrySource(entry.source);
 
           return {
             id: String(entry.id),
             started_at: String(entry.started_at),
             ended_at: typeof entry.ended_at === "string" ? entry.ended_at : null,
+            description: typeof entry.description === "string" ? entry.description : null,
+            source,
             quote_subtask_id: related?.quote_subtask_id ?? null,
           };
         }).filter((entry) => entry.quote_subtask_id && subtaskIds.includes(entry.quote_subtask_id));
@@ -248,6 +256,7 @@ export default async function WorkerProjectDetailPage({
     }
   }
   const quoteTimeEntriesBySubtask = new Map<string, QuoteSubtaskTimeEntryRow[]>();
+  const quoteSubtaskTitleById = new Map(quoteSubtasks.map((subtask) => [subtask.id, subtask.title]));
 
   for (const entry of quoteSubtaskTimeEntries) {
     if (!entry.quote_subtask_id) {
@@ -261,7 +270,7 @@ export default async function WorkerProjectDetailPage({
 
   const running = runningFromDb as TimeEntryRow | null;
   const usedHours = totalUsedHours(workerEntries);
-  const assignedHours = Number(project.assigned_hours ?? 0);
+  const assignedHours = assignedHoursFromQuoteEstimateOrSubtasks(linkedQuote, quoteSubtasks);
   const outstandingDebt = Number(billingSummary?.outstanding_debt_hours ?? 0);
 
   return (
@@ -306,7 +315,7 @@ export default async function WorkerProjectDetailPage({
                   </div>
                   <div className="rounded-xl border border-border/70 bg-background/55 px-3 py-2">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{t(locale, "Estimated", "Stimato")}</p>
-                    <p className="mt-1 text-sm font-semibold text-brand-700 dark:text-brand-300">{formatCompactHours(parseHours(linkedQuote.total_estimated_hours))}</p>
+                    <p className="mt-1 text-sm font-semibold text-brand-700 dark:text-brand-300">{formatCompactHours(parseProjectHours(linkedQuote.total_estimated_hours))}</p>
                   </div>
                   <div className="rounded-xl border border-border/70 bg-background/55 px-3 py-2">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{t(locale, "Tracked here", "Registrato qui")}</p>
@@ -323,7 +332,7 @@ export default async function WorkerProjectDetailPage({
                     {quoteSubtasks.map((subtask) => {
                       const subtaskEntries = quoteTimeEntriesBySubtask.get(subtask.id) ?? [];
                       const loggedHours = completedLoggedHours(subtaskEntries);
-                      const estimatedHours = parseHours(subtask.estimated_hours);
+                      const estimatedHours = parseProjectHours(subtask.estimated_hours);
                       const remainingHours = Math.max(estimatedHours - loggedHours, 0);
                       const isOverEstimate = estimatedHours > 0 && loggedHours > estimatedHours;
                       const progress = progressPercent(loggedHours, estimatedHours);
@@ -392,6 +401,37 @@ export default async function WorkerProjectDetailPage({
                               }}
                             />
                           </SubtaskTimeControlsReveal>
+                          <div className="border-t border-border/60 bg-card/20 px-3 py-3">
+                            <LoggedActivitySection
+                              title={t(locale, "Logged activity", "Attività registrata")}
+                              description={t(locale, "Subtask activity stays compressed until you need the details.", "L'attività della sottoattività resta compatta finché servono i dettagli.")}
+                              showLabel={t(locale, "Show activity", "Mostra attività")}
+                              hideLabel={t(locale, "Hide activity", "Nascondi attività")}
+                              countLabel={`${subtaskEntries.length} ${t(locale, subtaskEntries.length === 1 ? "entry" : "entries", subtaskEntries.length === 1 ? "voce" : "voci")}`}
+                            >
+                              <LoggedActivityList
+                                entries={subtaskEntries.map((entry) => ({
+                                  id: entry.id,
+                                  startedAt: entry.started_at,
+                                  endedAt: entry.ended_at,
+                                  description: entry.description,
+                                  source: entry.source,
+                                }))}
+                                tag={tag}
+                                labels={{
+                                  emptyMessage: t(locale, "No logged activity for this subtask yet.", "Nessuna attività registrata per questa sottoattività."),
+                                  running: t(locale, "Running", "In corso"),
+                                  timer: t(locale, "Timer", "Timer"),
+                                  manual: t(locale, "Manual", "Manuale"),
+                                  started: t(locale, "Started", "Inizio"),
+                                  ended: t(locale, "Ended", "Fine"),
+                                  duration: t(locale, "Duration", "Durata"),
+                                  description: t(locale, "Description", "Descrizione"),
+                                  noDescription: t(locale, "No description provided.", "Nessuna descrizione fornita."),
+                                }}
+                              />
+                            </LoggedActivitySection>
+                          </div>
                         </article>
                       );
                     })}
@@ -405,30 +445,37 @@ export default async function WorkerProjectDetailPage({
             title={t(locale, "My recent entries", "Le mie voci recenti")}
             description={t(locale, "The latest time you logged specifically against this project.", "Il tempo più recente che hai registrato specificamente su questo progetto.")}
           >
-            <div className="space-y-3">
-              {workerEntries.length === 0 ? (
-                <p className="text-sm text-muted-foreground">{t(locale, "You have not logged time on this project yet.", "Non hai ancora registrato tempo su questo progetto.")}</p>
-              ) : (
-                workerEntries.map((entry) => {
-                  const durationLabel = entry.ended_at
-                    ? hoursToMinutesWithHoursDisplay(loggedHoursBetween(entry.started_at, entry.ended_at))
-                    : t(locale, "Running", "In corso");
-
-                  return (
-                    <article key={entry.id} className="rounded-xl border border-border/70 bg-background/60 px-4 py-3">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-foreground">{new Date(entry.started_at).toLocaleString(tag)}</p>
-                          <p className="mt-1 text-xs text-muted-foreground">{entry.source === "timer" ? t(locale, "Timer", "Timer") : t(locale, "Manual", "Manuale")}</p>
-                        </div>
-                        <span className="rounded-full border border-border bg-background/70 px-2.5 py-1 text-xs font-medium text-muted-foreground">{durationLabel}</span>
-                      </div>
-                      <p className="mt-3 text-sm text-muted-foreground">{entry.description || t(locale, "No description provided.", "Nessuna descrizione fornita.")}</p>
-                    </article>
-                  );
-                })
-              )}
-            </div>
+            <LoggedActivitySection
+              title={t(locale, "Logged activity", "Attività registrata")}
+              description={t(locale, "Compact rows keep the project log short; click any row to expand details.", "Le righe compatte mantengono breve il log progetto; clicca una riga per espandere i dettagli.")}
+              showLabel={t(locale, "Show activity", "Mostra attività")}
+              hideLabel={t(locale, "Hide activity", "Nascondi attività")}
+              countLabel={`${workerEntries.length} ${t(locale, workerEntries.length === 1 ? "entry" : "entries", workerEntries.length === 1 ? "voce" : "voci")}`}
+              defaultExpanded={workerEntries.length > 0}
+            >
+              <LoggedActivityList
+                entries={workerEntries.map((entry) => ({
+                  id: entry.id,
+                  startedAt: entry.started_at,
+                  endedAt: entry.ended_at,
+                  description: entry.description,
+                  source: entry.source,
+                  contextLabel: entry.quote_subtask_id ? quoteSubtaskTitleById.get(entry.quote_subtask_id) ?? null : null,
+                }))}
+                tag={tag}
+                labels={{
+                  emptyMessage: t(locale, "You have not logged time on this project yet.", "Non hai ancora registrato tempo su questo progetto."),
+                  running: t(locale, "Running", "In corso"),
+                  timer: t(locale, "Timer", "Timer"),
+                  manual: t(locale, "Manual", "Manuale"),
+                  started: t(locale, "Started", "Inizio"),
+                  ended: t(locale, "Ended", "Fine"),
+                  duration: t(locale, "Duration", "Durata"),
+                  description: t(locale, "Description", "Descrizione"),
+                  noDescription: t(locale, "No description provided.", "Nessuna descrizione fornita."),
+                }}
+              />
+            </LoggedActivitySection>
           </QuotesSectionCard>
         </div>
       )}

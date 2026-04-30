@@ -10,6 +10,7 @@ import { quotesSecondaryButtonClass } from "@/components/quotes";
 import { requireRole } from "@/lib/auth";
 import { localeTag, t } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n-server";
+import { assignedHoursFromQuoteEstimateOrSubtasks } from "@/lib/project-hours";
 import { createClient } from "@/lib/supabase/server";
 import { hoursToMinutesWithHoursDisplay, loggedHoursBetween } from "@/lib/time";
 
@@ -19,7 +20,6 @@ interface AdminProjectRow {
   id: string;
   name: string;
   description: string | null;
-  assigned_hours: number;
   billing_mode: string | null;
   customer_id: string;
   profiles: {
@@ -49,6 +49,15 @@ interface WorkerProfileRow {
   full_name: string | null;
 }
 
+interface LinkedQuoteRow {
+  id: string;
+  total_estimated_hours: number | string | null;
+}
+
+interface QuoteSubtaskEstimateRow {
+  estimated_hours: number | string | null;
+}
+
 function totalUsedHours(entries: TimeEntryRow[]) {
   return entries.reduce((total, entry) => {
     if (!entry.ended_at) {
@@ -71,10 +80,10 @@ export default async function AdminProjectDetailPage({
   const routeParams = await Promise.resolve(params);
   const projectId = routeParams.projectId?.trim();
 
-  const [{ data: project }, { data: billingSummary }, { data: timeEntries }] = await Promise.all([
+  const [{ data: project }, { data: billingSummary }, { data: timeEntries }, { data: linkedQuoteFromDb }] = await Promise.all([
     supabase
       .from("projects")
-      .select("id,name,description,assigned_hours,billing_mode,customer_id,profiles!projects_customer_id_fkey(full_name),project_workers(worker_id)")
+      .select("id,name,description,billing_mode,customer_id,profiles!projects_customer_id_fkey(full_name),project_workers(worker_id)")
       .eq("id", projectId)
       .maybeSingle<AdminProjectRow>(),
     supabase.from("project_billing_summary").select("project_id,outstanding_debt_hours").eq("project_id", projectId).maybeSingle<BillingSummaryRow>(),
@@ -84,6 +93,11 @@ export default async function AdminProjectDetailPage({
       .eq("project_id", projectId)
       .order("started_at", { ascending: false })
       .limit(12),
+    supabase
+      .from("quotes")
+      .select("id,total_estimated_hours")
+      .eq("linked_project_id", projectId)
+      .maybeSingle<LinkedQuoteRow>(),
   ]);
 
   if (!project) {
@@ -103,8 +117,16 @@ export default async function AdminProjectDetailPage({
   discussionFormData.set("projectId", project.id);
   const messages = await loadProjectDiscussionAction(discussionFormData);
   const projectEntries = (timeEntries ?? []) as TimeEntryRow[];
+  const linkedQuote = linkedQuoteFromDb as LinkedQuoteRow | null;
+  const { data: quoteSubtasksFromDb } = linkedQuote
+    ? await supabase
+        .from("quote_subtasks")
+        .select("estimated_hours")
+        .eq("quote_id", linkedQuote.id)
+    : { data: [] };
+  const quoteSubtasks = (quoteSubtasksFromDb ?? []) as QuoteSubtaskEstimateRow[];
   const usedHours = totalUsedHours(projectEntries);
-  const assignedHours = Number(project.assigned_hours ?? 0);
+  const assignedHours = assignedHoursFromQuoteEstimateOrSubtasks(linkedQuote, quoteSubtasks);
   const remainingHours = Math.max(0, assignedHours - usedHours);
   const outstandingDebt = Number(billingSummary?.outstanding_debt_hours ?? 0);
   const workerNames = workerIds.map((workerId) => workerNameById.get(workerId) ?? workerId);
