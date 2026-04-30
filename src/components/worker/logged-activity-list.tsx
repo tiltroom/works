@@ -1,3 +1,6 @@
+"use client";
+
+import { formatLocalDateTime } from "@/lib/date-time";
 import {
   hoursToMinutesWithHoursDisplay,
   loggedHoursBetween,
@@ -39,7 +42,7 @@ function joinClasses(...values: Array<string | false | null | undefined>) {
 }
 
 function formatCompactTimestamp(tag: string, value: string) {
-  return new Date(value).toLocaleString(tag, {
+  return formatLocalDateTime(value, tag, {
     day: "2-digit",
     month: "short",
     hour: "2-digit",
@@ -48,7 +51,7 @@ function formatCompactTimestamp(tag: string, value: string) {
 }
 
 function formatFullTimestamp(tag: string, value: string | null) {
-  return value ? new Date(value).toLocaleString(tag) : "—";
+  return formatLocalDateTime(value, tag);
 }
 
 function formatCompactDuration(entry: LoggedActivityEntry, runningLabel: string) {
