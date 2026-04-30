@@ -14,6 +14,7 @@ import type { ReactNode } from "react";
 import { localeTag, t } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n-server";
 import type { QueryToastVariant } from "@/lib/query-toast";
+import { outstandingDebtFromBilledHours, sumPurchasedHours } from "@/lib/project-hours";
 import { loggedHoursBetween } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
@@ -57,6 +58,7 @@ type AdminProjectRow = {
   customer_id: string;
   profiles: { full_name?: string } | null;
   project_workers: ProjectWorkerAssignment[] | null;
+  billing_mode: string | null;
 };
 
 type AdminProjectTransactionRow = {
@@ -94,15 +96,17 @@ function formatAssignedRemainingHours(assignedHours: number, remainingHours: num
 }
 
 function formatProjectBillingBalance(
-  billingMode: string | null | undefined,
   assignedHours: number,
   remainingHours: number,
   outstandingDebt: number,
 ): string {
-  if (billingMode === "postpaid" && outstandingDebt > 0) {
-    return `${formatProjectHours(assignedHours)} credit / ${formatProjectHours(outstandingDebt)} debt`;
+  const assignedRemaining = formatAssignedRemainingHours(assignedHours, remainingHours);
+
+  if (outstandingDebt > 0) {
+    return `${assignedRemaining} / ${formatProjectHours(outstandingDebt)} debt`;
   }
-  return formatAssignedRemainingHours(assignedHours, remainingHours);
+
+  return assignedRemaining;
 }
 
 function totalUsedHours(entries: ProjectTimeRow[]) {
@@ -173,16 +177,6 @@ export default async function AdminPage({
     adminClient.auth.admin.listUsers({ page: 1, perPage: 1000 }),
   ]);
 
-  const projectIds = (projects ?? []).map((p: Record<string, unknown>) => String(p.id));
-  let adminBillingSummaries: { project_id: string; outstanding_debt_hours: number }[] = [];
-  if (projectIds.length > 0) {
-    const { data: absData } = await supabase.from("project_billing_summary").select("project_id,outstanding_debt_hours").in("project_id", projectIds);
-    adminBillingSummaries = (absData ?? []) as { project_id: string; outstanding_debt_hours: number }[];
-  }
-  const adminDebtByProjectId = new Map<string, number>(
-    adminBillingSummaries.map((s) => [s.project_id, Number(s.outstanding_debt_hours ?? 0)]),
-  );
-
   const missingCustomerRateColumn = customerRatesError?.code === "PGRST204"
     || customerRatesError?.code === "42703"
     || customerRatesError?.message.includes("custom_hourly_rate_cents")
@@ -237,6 +231,13 @@ export default async function AdminPage({
     const existingEntries = map.get(entry.project_id) ?? [];
     existingEntries.push(entry);
     map.set(entry.project_id, existingEntries);
+
+    return map;
+  }, new Map());
+  const projectPurchasesByProjectId = ((hourPurchases ?? []) as AdminProjectTransactionRow[]).reduce<Map<string, AdminProjectTransactionRow[]>>((map, purchase) => {
+    const existingPurchases = map.get(purchase.project_id) ?? [];
+    existingPurchases.push(purchase);
+    map.set(purchase.project_id, existingPurchases);
 
     return map;
   }, new Map());
@@ -498,18 +499,17 @@ export default async function AdminPage({
                           <td className="px-4 py-3 text-muted-foreground">{formatAssignedWorkerNames(project.project_workers as ProjectWorkerAssignment[] | null, workersById)}</td>
                           <td className="px-4 py-3 text-right">
                             {(() => {
-                              const pBillingMode = (project as Record<string, unknown>).billing_mode as string | null | undefined;
-                              const pOutstandingDebt = adminDebtByProjectId.get(String(project.id)) ?? 0;
+                              const usedHours = totalUsedHours(projectTimeEntriesByProjectId.get(project.id) ?? []);
+                              const outstandingDebt = outstandingDebtFromBilledHours(usedHours, sumPurchasedHours(projectPurchasesByProjectId.get(project.id) ?? []));
                               return (
                               <span className="inline-flex items-center rounded border border-border bg-background/65 px-2 py-0.5 text-xs font-medium text-foreground">
                                 {formatProjectBillingBalance(
-                                  pBillingMode,
                                   Number(project.assigned_hours ?? 0),
                                   Math.max(
-                                    Number(project.assigned_hours ?? 0) - totalUsedHours(projectTimeEntriesByProjectId.get(project.id) ?? []),
+                                    Number(project.assigned_hours ?? 0) - usedHours,
                                     0,
                                   ),
-                                  pOutstandingDebt,
+                                  outstandingDebt,
                                 )}
                               </span>
                               );

@@ -6,12 +6,12 @@ import {
   updateProjectDiscussionMessageAction,
 } from "@/app/actions/projects";
 import { LocalDateTime } from "@/components/local-date-time";
-import { ProjectDetailShell, ProjectDiscussionPanel, QuotesSectionCard } from "@/components/projects";
+import { ProjectDetailShell, ProjectDiscussionPanel, QuotesSectionCard, type ProjectDetailMetaItem } from "@/components/projects";
 import { quotesSecondaryButtonClass } from "@/components/quotes";
 import { requireRole } from "@/lib/auth";
 import { localeTag, t } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n-server";
-import { assignedHoursFromQuoteEstimateOrSubtasks } from "@/lib/project-hours";
+import { assignedHoursFromQuoteEstimateOrSubtasks, outstandingDebtFromBilledHours, sumPurchasedHours } from "@/lib/project-hours";
 import { createClient } from "@/lib/supabase/server";
 import { hoursToMinutesWithHoursDisplay, loggedHoursBetween } from "@/lib/time";
 
@@ -29,11 +29,6 @@ interface AdminProjectRow {
   project_workers: Array<{
     worker_id: string;
   }> | null;
-}
-
-interface BillingSummaryRow {
-  project_id: string;
-  outstanding_debt_hours: number;
 }
 
 interface TimeEntryRow {
@@ -59,6 +54,10 @@ interface QuoteSubtaskEstimateRow {
   estimated_hours: number | string | null;
 }
 
+interface PurchaseHoursRow {
+  hours_added: number | string | null;
+}
+
 function totalUsedHours(entries: TimeEntryRow[]) {
   return entries.reduce((total, entry) => {
     if (!entry.ended_at) {
@@ -81,24 +80,26 @@ export default async function AdminProjectDetailPage({
   const routeParams = await Promise.resolve(params);
   const projectId = routeParams.projectId?.trim();
 
-  const [{ data: project }, { data: billingSummary }, { data: timeEntries }, { data: linkedQuoteFromDb }] = await Promise.all([
+  const [{ data: project }, { data: timeEntries }, { data: linkedQuoteFromDb }, { data: purchases }] = await Promise.all([
     supabase
       .from("projects")
       .select("id,name,description,billing_mode,customer_id,profiles!projects_customer_id_fkey(full_name),project_workers(worker_id)")
       .eq("id", projectId)
       .maybeSingle<AdminProjectRow>(),
-    supabase.from("project_billing_summary").select("project_id,outstanding_debt_hours").eq("project_id", projectId).maybeSingle<BillingSummaryRow>(),
     supabase
       .from("time_entries")
       .select("id,worker_id,started_at,ended_at,description,source")
       .eq("project_id", projectId)
-      .order("started_at", { ascending: false })
-      .limit(12),
+      .order("started_at", { ascending: false }),
     supabase
       .from("quotes")
       .select("id,total_estimated_hours")
       .eq("linked_project_id", projectId)
       .maybeSingle<LinkedQuoteRow>(),
+    supabase
+      .from("hour_purchases")
+      .select("hours_added")
+      .eq("project_id", projectId),
   ]);
 
   if (!project) {
@@ -118,6 +119,7 @@ export default async function AdminProjectDetailPage({
   discussionFormData.set("projectId", project.id);
   const messages = await loadProjectDiscussionAction(discussionFormData);
   const projectEntries = (timeEntries ?? []) as TimeEntryRow[];
+  const projectPurchases = (purchases ?? []) as PurchaseHoursRow[];
   const linkedQuote = linkedQuoteFromDb as LinkedQuoteRow | null;
   const { data: quoteSubtasksFromDb } = linkedQuote
     ? await supabase
@@ -128,9 +130,29 @@ export default async function AdminProjectDetailPage({
   const quoteSubtasks = (quoteSubtasksFromDb ?? []) as QuoteSubtaskEstimateRow[];
   const usedHours = totalUsedHours(projectEntries);
   const assignedHours = assignedHoursFromQuoteEstimateOrSubtasks(linkedQuote, quoteSubtasks);
+  const billedHours = sumPurchasedHours(projectPurchases);
   const remainingHours = Math.max(0, assignedHours - usedHours);
-  const outstandingDebt = Number(billingSummary?.outstanding_debt_hours ?? 0);
+  const isPostPaidProject = project.billing_mode === "postpaid";
+  const outstandingDebt = outstandingDebtFromBilledHours(usedHours, billedHours);
   const workerNames = workerIds.map((workerId) => workerNameById.get(workerId) ?? workerId);
+  const projectMeta: ProjectDetailMetaItem[] = [
+    { label: t(locale, "Customer", "Cliente"), value: project.profiles?.full_name || t(locale, "Unknown", "Sconosciuto") },
+    { label: t(locale, "Assigned hours", "Ore assegnate"), value: hoursToMinutesWithHoursDisplay(assignedHours), tone: "accent" },
+    { label: t(locale, "Used hours", "Ore usate"), value: hoursToMinutesWithHoursDisplay(usedHours) },
+    {
+      label: t(locale, "Remaining hours", "Ore rimanenti"),
+      value: hoursToMinutesWithHoursDisplay(remainingHours),
+      tone: "success",
+    },
+  ];
+
+  if (isPostPaidProject) {
+    projectMeta.push({
+      label: t(locale, "Outstanding debt", "Debito residuo"),
+      value: hoursToMinutesWithHoursDisplay(outstandingDebt),
+      tone: outstandingDebt > 0 ? "danger" : "success",
+    });
+  }
 
   return (
     <ProjectDetailShell
@@ -140,19 +162,10 @@ export default async function AdminProjectDetailPage({
       description={t(locale, "Track one project in context, review the latest activity, and keep the delivery discussion moving without leaving the admin workspace.", "Monitora un progetto nel suo contesto, rivedi l'attività più recente e mantieni viva la discussione di consegna senza uscire dall'area admin.")}
       projectName={project.name}
       projectDescription={project.description || t(locale, "No project description provided yet.", "Nessuna descrizione progetto disponibile.")}
-      badgeLabel={project.billing_mode === "postpaid" ? t(locale, "Post-paid", "Post-pagato") : t(locale, "Prepaid", "Prepagato")}
-      badgeTone={project.billing_mode === "postpaid" ? "warning" : "info"}
+      badgeLabel={isPostPaidProject ? t(locale, "Post-paid", "Post-pagato") : t(locale, "Prepaid", "Prepagato")}
+      badgeTone={isPostPaidProject ? "warning" : "info"}
       headerAction={<Link href={`/admin?tab=projects&editProjectId=${project.id}`} className={quotesSecondaryButtonClass}>{t(locale, "Edit project", "Modifica progetto")}</Link>}
-      meta={[
-        { label: t(locale, "Customer", "Cliente"), value: project.profiles?.full_name || t(locale, "Unknown", "Sconosciuto") },
-        { label: t(locale, "Assigned hours", "Ore assegnate"), value: hoursToMinutesWithHoursDisplay(assignedHours), tone: "accent" },
-        { label: t(locale, "Used hours", "Ore usate"), value: hoursToMinutesWithHoursDisplay(usedHours) },
-        {
-          label: project.billing_mode === "postpaid" ? t(locale, "Outstanding debt", "Debito residuo") : t(locale, "Remaining hours", "Ore rimanenti"),
-          value: hoursToMinutesWithHoursDisplay(project.billing_mode === "postpaid" ? outstandingDebt : remainingHours),
-          tone: project.billing_mode === "postpaid" && outstandingDebt > 0 ? "danger" : "success",
-        },
-      ]}
+      meta={projectMeta}
       overview={(
         <QuotesSectionCard
           title={t(locale, "Latest tracked work", "Ultimo lavoro registrato")}
@@ -208,7 +221,7 @@ export default async function AdminProjectDetailPage({
             <div className="rounded-xl border border-border/70 bg-background/60 px-4 py-4 text-sm text-muted-foreground">
               <p className="font-medium text-foreground">{t(locale, "Billing state", "Stato fatturazione")}</p>
               <p className="mt-2">
-                {project.billing_mode === "postpaid"
+                {isPostPaidProject
                   ? t(locale, "Post-paid projects continue accruing work and surface debt separately from assigned-hour credit.", "I progetti post-pagati continuano ad accumulare lavoro e mostrano il debito separatamente dal credito ore assegnato.")
                   : t(locale, "Prepaid projects consume assigned hours directly, so remaining capacity is the main delivery signal.", "I progetti prepagati consumano direttamente le ore assegnate, quindi la capacità residua è il segnale principale di consegna.")}
               </p>
