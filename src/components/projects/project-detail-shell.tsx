@@ -66,7 +66,7 @@ export function ProjectDetailShell({
             </div>
             <p className="max-w-3xl text-sm leading-6 text-muted-foreground">{projectDescription}</p>
           </div>
-          <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className={`grid gap-3 p-4 sm:grid-cols-2 ${meta.length >= 5 ? "xl:grid-cols-5" : "xl:grid-cols-4"}`}>
             {meta.map((item) => (
               <QuotesMetaItem key={item.label} label={item.label} value={item.value} tone={item.tone} />
             ))}
