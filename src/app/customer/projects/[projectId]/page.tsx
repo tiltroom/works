@@ -5,6 +5,7 @@ import {
   loadProjectDiscussionAction,
   updateProjectDiscussionMessageAction,
 } from "@/app/actions/projects";
+import { LocalDateTime } from "@/components/local-date-time";
 import { ProjectDetailShell, ProjectDiscussionPanel, QuotesSectionCard } from "@/components/projects";
 import { quotesPrimaryButtonClass } from "@/components/quotes";
 import { requireRole } from "@/lib/auth";
@@ -160,7 +161,7 @@ export default async function CustomerProjectDetailPage({
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-foreground">{workerName}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">{new Date(entry.started_at).toLocaleString(tag)}</p>
+                        <p className="mt-1 text-xs text-muted-foreground"><LocalDateTime value={entry.started_at} tag={tag} /></p>
                       </div>
                       <span className="rounded-full border border-border bg-background/70 px-2.5 py-1 text-xs font-medium text-muted-foreground">{durationLabel}</span>
                     </div>
@@ -208,7 +209,7 @@ export default async function CustomerProjectDetailPage({
                     <article key={purchase.id} className="rounded-xl border border-border/70 bg-background/60 px-4 py-3 text-sm">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="font-medium text-foreground">{hoursToMinutesWithHoursDisplay(Math.abs(Number(purchase.hours_added ?? 0)))}</p>
-                        <span className="text-xs text-muted-foreground">{new Date(purchase.created_at).toLocaleString(tag)}</span>
+                        <span className="text-xs text-muted-foreground"><LocalDateTime value={purchase.created_at} tag={tag} /></span>
                       </div>
                       <p className="mt-1 text-muted-foreground">{amountLabel} • {purchase.payment_method === "manual" ? t(locale, "Manual", "Manuale") : t(locale, "Stripe", "Stripe")}</p>
                       {purchase.admin_comment ? <p className="mt-2 text-xs text-muted-foreground">{purchase.admin_comment}</p> : null}

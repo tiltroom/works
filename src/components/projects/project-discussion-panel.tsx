@@ -12,6 +12,7 @@ import {
 } from "@/components/quotes";
 import type { ProjectDiscussionMessageRecord } from "@/lib/quotes";
 import type { AppRole } from "@/lib/types";
+import { formatLocalDateTime } from "@/lib/date-time";
 
 function joinClasses(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
@@ -241,8 +242,8 @@ export function ProjectDiscussionPanel({
                           {message.editedAt ? <span className="text-xs font-medium text-muted-foreground">{labels.editedLabel}</span> : null}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {new Date(message.createdAt).toLocaleString(tag)}
-                          {message.editedAt ? ` • ${labels.editedLabel} ${new Date(message.editedAt).toLocaleString(tag)}` : ""}
+                          {formatLocalDateTime(message.createdAt, tag)}
+                          {message.editedAt ? ` • ${labels.editedLabel} ${formatLocalDateTime(message.editedAt, tag)}` : ""}
                         </p>
                       </div>
 

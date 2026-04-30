@@ -5,6 +5,7 @@ import {
   loadProjectDiscussionAction,
   updateProjectDiscussionMessageAction,
 } from "@/app/actions/projects";
+import { LocalDateTime } from "@/components/local-date-time";
 import { ProjectDetailShell, ProjectDiscussionPanel, QuotesSectionCard } from "@/components/projects";
 import { quotesSecondaryButtonClass } from "@/components/quotes";
 import { requireRole } from "@/lib/auth";
@@ -172,7 +173,7 @@ export default async function AdminProjectDetailPage({
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-foreground">{workerName}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">{new Date(entry.started_at).toLocaleString(tag)}</p>
+                        <p className="mt-1 text-xs text-muted-foreground"><LocalDateTime value={entry.started_at} tag={tag} /></p>
                       </div>
                       <span className="rounded-full border border-border bg-background/70 px-2.5 py-1 text-xs font-medium text-muted-foreground">{durationLabel}</span>
                     </div>

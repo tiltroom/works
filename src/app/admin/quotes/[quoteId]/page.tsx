@@ -17,6 +17,7 @@ import {
   updateQuoteSubtaskAction,
   updateQuoteSubtaskEntryAction,
 } from "@/app/actions/quotes";
+import { LocalDateTime } from "@/components/local-date-time";
 import { LogoutButton } from "@/components/logout-button";
 import {
   QuotesHeader,
@@ -47,10 +48,6 @@ import { createClient } from "@/lib/supabase/server";
 import type { QueryToastVariant } from "@/lib/query-toast";
 
 export const dynamic = "force-dynamic";
-
-function formatDateTime(tag: string, value: string | null) {
-  return value ? new Date(value).toLocaleString(tag) : "—";
-}
 
 export default async function AdminQuoteViewPage({
   params,
@@ -170,7 +167,7 @@ export default async function AdminQuoteViewPage({
             { label: t(locale, "Billing", "Fatturazione"), value: quote.billingMode === "postpaid" ? t(locale, "Post-paid", "Post-pagato") : t(locale, "Prepaid", "Prepagato") },
             { label: t(locale, "Estimated", "Stimato"), value: formatQuoteHours(quote.totalEstimatedHours), tone: "accent" },
             { label: t(locale, "Logged", "Registrato"), value: formatQuoteHours(quote.totalLoggedHours) },
-            { label: t(locale, "Updated", "Aggiornato"), value: formatDateTime(tag, quote.updatedAt) },
+            { label: t(locale, "Updated", "Aggiornato"), value: <LocalDateTime value={quote.updatedAt} tag={tag} /> },
           ]}
         />
 
@@ -188,7 +185,7 @@ export default async function AdminQuoteViewPage({
                 signerLabel: t(locale, "Admin signer", "Firmatario admin"),
                 signedAtTitle: t(locale, "Admin signed at", "Firma admin il"),
                 signerName: quote.signedByName,
-                signedAtLabel: formatDateTime(tag, quote.signedAt),
+                signedAtLabel: quote.signedAt ? <LocalDateTime value={quote.signedAt} tag={tag} /> : null,
                 emptyMessage: t(locale, "Waiting for admin signature.", "In attesa della firma admin."),
               },
               {
@@ -196,7 +193,7 @@ export default async function AdminQuoteViewPage({
                 signerLabel: t(locale, "Customer signer", "Firmatario cliente"),
                 signedAtTitle: t(locale, "Customer signed at", "Firma cliente il"),
                 signerName: quote.customerSignedByName,
-                signedAtLabel: formatDateTime(tag, quote.customerSignedAt),
+                signedAtLabel: quote.customerSignedAt ? <LocalDateTime value={quote.customerSignedAt} tag={tag} /> : null,
                 emptyMessage: t(locale, "Waiting for customer signature.", "In attesa della firma cliente."),
               },
             ]}
@@ -213,7 +210,7 @@ export default async function AdminQuoteViewPage({
                 assignedWorkers.map((assignment) => (
                   <div key={`${assignment.quoteId}:${assignment.workerId}`} className="rounded-xl border border-border/70 bg-background/60 px-3 py-2 text-sm">
                     <p className="font-medium text-foreground">{assignment.workerName || assignment.workerId}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{formatDateTime(tag, assignment.assignedAt)}</p>
+                    <p className="mt-1 text-xs text-muted-foreground"><LocalDateTime value={assignment.assignedAt} tag={tag} /></p>
                   </div>
                 ))
               )}
@@ -232,7 +229,7 @@ export default async function AdminQuoteViewPage({
                 <div className="rounded-xl border border-border/70 bg-background/60 px-3 py-3">
                   <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{t(locale, "Linked project", "Progetto collegato")}</p>
                   <p className="mt-1 text-sm font-medium text-foreground">{quote.linkedProjectName || "—"}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{formatDateTime(tag, quote.convertedAt)}</p>
+                  <p className="mt-1 text-xs text-muted-foreground"><LocalDateTime value={quote.convertedAt} tag={tag} /></p>
                 </div>
               </div>
             </div>
@@ -270,7 +267,7 @@ export default async function AdminQuoteViewPage({
               subtaskTitle: subtasks.find((subtask) => subtask.id === entry.quoteSubtaskId)?.title ?? t(locale, "Unknown subtask", "Sottoattività sconosciuta"),
               loggedLabel: formatQuoteHours(entry.loggedHours),
               note: entry.note,
-              metaLabel: formatDateTime(tag, entry.createdAt),
+              metaLabel: <LocalDateTime value={entry.createdAt} tag={tag} />,
               action: canManageEntries ? (
                 <div className="flex flex-wrap gap-2">
                   <Link href={`${detailHref}?editEntryId=${entry.id}#manage-entry`} className={quotesSecondaryButtonClass}>{t(locale, "Edit", "Modifica")}</Link>

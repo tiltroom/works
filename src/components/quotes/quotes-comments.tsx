@@ -13,6 +13,7 @@ import { QuotesRichTextContent } from "@/components/quotes/quotes-rich-text-cont
 import { QuotesRichTextEditor } from "@/components/quotes/quotes-rich-text-editor";
 import type { QuoteCommentRecord } from "@/lib/quotes";
 import type { AppRole } from "@/lib/types";
+import { formatLocalDateTime } from "@/lib/date-time";
 
 function joinClasses(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
@@ -362,8 +363,8 @@ export function QuoteDiscussionPanel({
                           {comment.editedAt ? <span className="text-xs font-medium text-muted-foreground">{labels.editedLabel}</span> : null}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {new Date(comment.createdAt).toLocaleString(tag)}
-                          {comment.editedAt ? ` • ${labels.editedLabel} ${new Date(comment.editedAt).toLocaleString(tag)}` : ""}
+                          {formatLocalDateTime(comment.createdAt, tag)}
+                          {comment.editedAt ? ` • ${labels.editedLabel} ${formatLocalDateTime(comment.editedAt, tag)}` : ""}
                         </p>
                       </div>
 

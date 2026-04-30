@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { QuotesSectionCard, quotesInsetClass } from "@/components/quotes/quotes-shared";
 
 interface QuotesSignatureSummaryProps {
@@ -7,7 +8,7 @@ interface QuotesSignatureSummaryProps {
   signedAtTitle?: string;
   signerName?: string | null;
   signerEmail?: string | null;
-  signedAtLabel?: string | null;
+  signedAtLabel?: ReactNode;
   ipAddressLabel?: string | null;
   signatureSteps?: Array<{
     key: string;
@@ -15,7 +16,7 @@ interface QuotesSignatureSummaryProps {
     signedAtTitle: string;
     signerName?: string | null;
     signerEmail?: string | null;
-    signedAtLabel?: string | null;
+    signedAtLabel?: ReactNode;
     ipAddressLabel?: string | null;
     emptyMessage: string;
   }>;

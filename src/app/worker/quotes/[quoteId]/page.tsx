@@ -8,6 +8,7 @@ import {
   loadQuotesPageData,
   updateQuoteCommentAction,
 } from "@/app/actions/quotes";
+import { LocalDateTime } from "@/components/local-date-time";
 import { LogoutButton } from "@/components/logout-button";
 import {
   QuoteActionModal,
@@ -34,10 +35,6 @@ import {
 import type { QueryToastVariant } from "@/lib/query-toast";
 
 export const dynamic = "force-dynamic";
-
-function formatDateTime(tag: string, value: string | null) {
-  return value ? new Date(value).toLocaleString(tag) : "—";
-}
 
 export default async function WorkerQuoteViewPage({
   params,
@@ -119,7 +116,7 @@ export default async function WorkerQuoteViewPage({
             { label: t(locale, "Customer", "Cliente"), value: quote.customerName || t(locale, "Unknown", "Sconosciuto") },
             { label: t(locale, "Estimated", "Stimato"), value: formatQuoteHours(quote.totalEstimatedHours), tone: "accent" },
             { label: t(locale, "Logged", "Registrato"), value: formatQuoteHours(quote.totalLoggedHours) },
-            { label: t(locale, "Updated", "Aggiornato"), value: formatDateTime(tag, quote.updatedAt) },
+            { label: t(locale, "Updated", "Aggiornato"), value: <LocalDateTime value={quote.updatedAt} tag={tag} /> },
           ]}
         />
 
@@ -139,7 +136,7 @@ export default async function WorkerQuoteViewPage({
                 assignedWorkers.map((assignment) => (
                   <div key={`${assignment.quoteId}:${assignment.workerId}`} className="rounded-xl border border-border/70 bg-background/60 px-3 py-2 text-sm">
                     <p className="font-medium text-foreground">{assignment.workerName || assignment.workerId}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{formatDateTime(tag, assignment.assignedAt)}</p>
+                    <p className="mt-1 text-xs text-muted-foreground"><LocalDateTime value={assignment.assignedAt} tag={tag} /></p>
                   </div>
                 ))
               )}
@@ -170,7 +167,7 @@ export default async function WorkerQuoteViewPage({
               subtaskTitle: subtasks.find((subtask) => subtask.id === entry.quoteSubtaskId)?.title ?? t(locale, "Unknown subtask", "Sottoattività sconosciuta"),
               loggedLabel: formatQuoteHours(entry.loggedHours),
               note: entry.note,
-              metaLabel: formatDateTime(tag, entry.createdAt),
+              metaLabel: <LocalDateTime value={entry.createdAt} tag={tag} />,
             }))}
             emptyMessage={t(locale, "No logged entries yet.", "Nessuna voce registrata ancora.")}
           />

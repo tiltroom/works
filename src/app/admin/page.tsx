@@ -1,6 +1,7 @@
 import { adjustProjectHoursAction, createProjectAction, deleteProjectAction, updateProjectAction } from "@/app/actions/projects";
 import { deleteInvitationAction, inviteUserAction } from "@/app/actions/invitations";
 import { deletePlatformUserAction, updateCustomerHourlyRateAction, updatePlatformUserAction } from "@/app/actions/admin-users";
+import { LocalDateTime } from "@/components/local-date-time";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -829,7 +830,7 @@ export default async function AdminPage({
                                     <td className="px-4 py-3 text-muted-foreground">{methodLabel}</td>
                                     <td className="px-4 py-3 font-mono text-foreground">{amountLabel}</td>
                                     <td className="px-4 py-3 text-muted-foreground">{purchase.admin_comment || "—"}</td>
-                                    <td className="px-4 py-3 text-muted-foreground">{new Date(purchase.created_at).toLocaleString(tag)}</td>
+                                    <td className="px-4 py-3 text-muted-foreground"><LocalDateTime value={purchase.created_at} tag={tag} /></td>
                                   </tr>
                                 );
                               })

@@ -1,4 +1,5 @@
 import { createCheckoutForHoursAction } from "@/app/actions/billing";
+import { LocalDateTime } from "@/components/local-date-time";
 import { LogoutButton } from "@/components/logout-button";
 import { hoursToMinutesWithHoursDisplay, loggedHoursBetween } from "@/lib/time";
 import { requireRole } from "@/lib/auth";
@@ -284,10 +285,10 @@ export default async function CustomerPage() {
                                         {workerName}
                                       </div>
                                     </td>
-                                    <td className="px-4 py-3 text-muted-foreground">{new Date(entry.started_at).toLocaleString(tag)}</td>
+                                    <td className="px-4 py-3 text-muted-foreground"><LocalDateTime value={entry.started_at} tag={tag} /></td>
                                     <td className="px-4 py-3">
                                       {entry.ended_at ? (
-                                        <span className="text-muted-foreground">{new Date(entry.ended_at).toLocaleString(tag)}</span>
+                                        <span className="text-muted-foreground"><LocalDateTime value={entry.ended_at} tag={tag} /></span>
                                       ) : (
                                         <span className="inline-flex items-center gap-1.5 rounded border border-brand-500/20 bg-brand-500/10 px-2 py-0.5 text-xs font-medium text-brand-700 dark:text-brand-300">
                                           <span className="h-1.5 w-1.5 rounded-full bg-brand-500 animate-pulse"></span>
@@ -366,7 +367,7 @@ export default async function CustomerPage() {
                             {amountLabel}
                           </td>
                           <td className="px-4 py-3 text-muted-foreground">{purchase.admin_comment || "—"}</td>
-                          <td className="px-4 py-3 text-muted-foreground">{new Date(purchase.created_at).toLocaleString(tag)}</td>
+                          <td className="px-4 py-3 text-muted-foreground"><LocalDateTime value={purchase.created_at} tag={tag} /></td>
                         </tr>
                       );
                     })

@@ -15,7 +15,7 @@ export interface QuotesWorkerEntryItem {
   estimateLabel?: string | null;
   loggedLabel?: string | null;
   note?: string | null;
-  metaLabel?: string | null;
+  metaLabel?: ReactNode;
   action?: ReactNode;
 }
 

@@ -4,6 +4,7 @@ import {
   loadQuotesPageData,
   startQuoteConversionCheckoutAction,
 } from "@/app/actions/quotes";
+import { LocalDateTime } from "@/components/local-date-time";
 import { LogoutButton } from "@/components/logout-button";
 import {
   QuoteActionModal,
@@ -18,10 +19,6 @@ import { formatQuoteHours, formatQuoteStatus } from "@/lib/quotes";
 import type { QueryToastVariant } from "@/lib/query-toast";
 
 export const dynamic = "force-dynamic";
-
-function formatDateTime(tag: string, value: string | null) {
-  return value ? new Date(value).toLocaleString(tag) : "—";
-}
 
 export default async function CustomerQuotesPage({
   searchParams,
@@ -145,7 +142,7 @@ export default async function CustomerQuotesPage({
                         <td className="px-4 py-3 align-top text-muted-foreground">{formatQuoteStatus(locale, quote.status)}</td>
                         <td className="px-4 py-3 align-top text-muted-foreground">{formatQuoteHours(quote.totalEstimatedHours)}</td>
                         <td className="px-4 py-3 align-top text-muted-foreground">{formatQuoteHours(quote.totalLoggedHours)}</td>
-                        <td className="px-4 py-3 align-top text-muted-foreground">{formatDateTime(tag, quote.updatedAt)}</td>
+                        <td className="px-4 py-3 align-top text-muted-foreground"><LocalDateTime value={quote.updatedAt} tag={tag} /></td>
                         <td className="px-4 py-3 align-top">
                           <div className="flex flex-wrap items-center gap-2">
                             <Link href={`/customer/quotes/${quote.id}`} className={quotesSecondaryButtonClass}>{t(locale, "View", "Vedi")}</Link>
