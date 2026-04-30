@@ -6,7 +6,7 @@ import {
   updateProjectDiscussionMessageAction,
 } from "@/app/actions/projects";
 import { createManualTimeEntryAction, startTimerAction, stopTimerAction } from "@/app/actions/time-entries";
-import { ProjectDetailShell, ProjectDiscussionPanel, QuotesSectionCard } from "@/components/projects";
+import { ProjectDetailShell, ProjectDiscussionPanel, QuotesSectionCard, type ProjectDetailMetaItem } from "@/components/projects";
 import { quotesSecondaryButtonClass } from "@/components/quotes";
 import { SubtaskTimeControls } from "@/components/worker/subtask-time-controls";
 import { SubtaskTimeControlsReveal } from "@/components/worker/subtask-time-controls-reveal";
@@ -16,7 +16,7 @@ import { requireRole } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { localeTag, t } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n-server";
-import { assignedHoursFromQuoteEstimateOrSubtasks, parseProjectHours } from "@/lib/project-hours";
+import { assignedHoursFromQuoteEstimateOrSubtasks, outstandingDebtFromBilledHours, parseProjectHours, sumPurchasedHours } from "@/lib/project-hours";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { hoursToMinutesWithHoursDisplay, loggedHoursBetween } from "@/lib/time";
@@ -34,11 +34,6 @@ interface WorkerProjectRow {
 interface ProjectCustomerDisplayRow {
   customer_id: string;
   full_name: string | null;
-}
-
-interface BillingSummaryRow {
-  project_id: string;
-  outstanding_debt_hours: number;
 }
 
 interface TimeEntryRow {
@@ -73,6 +68,15 @@ interface QuoteSubtaskTimeEntryRow {
   ended_at: string | null;
   description: string | null;
   source: "timer" | "manual";
+}
+
+interface ProjectTimeHoursRow {
+  started_at: string;
+  ended_at: string | null;
+}
+
+interface PurchaseHoursRow {
+  hours_added: number | string | null;
 }
 
 function totalUsedHours(entries: TimeEntryRow[]) {
@@ -166,13 +170,12 @@ export default async function WorkerProjectDetailPage({
     notFound();
   }
 
-  const [{ data: project }, { data: billingSummary }, { data: timeEntries }, { data: runningFromDb }, { data: linkedQuoteFromDb }] = await Promise.all([
+  const [{ data: project }, { data: timeEntries }, { data: runningFromDb }, { data: linkedQuoteFromDb }, { data: projectTimeEntries }, { data: purchases }] = await Promise.all([
     supabase
       .from("projects")
       .select("id,name,description,billing_mode,customer_id")
       .eq("id", projectId)
       .maybeSingle<WorkerProjectRow>(),
-    supabase.from("project_billing_summary").select("project_id,outstanding_debt_hours").eq("project_id", projectId).maybeSingle<BillingSummaryRow>(),
     supabase
       .from("time_entries")
       .select("id,started_at,ended_at,description,source,quote_subtask_id")
@@ -193,6 +196,15 @@ export default async function WorkerProjectDetailPage({
       .select("id,title,total_estimated_hours,total_logged_hours")
       .eq("linked_project_id", projectId)
       .maybeSingle<LinkedQuoteRow>(),
+    supabase
+      .from("time_entries")
+      .select("started_at,ended_at")
+      .eq("project_id", projectId)
+      .not("ended_at", "is", null),
+    supabase
+      .from("hour_purchases")
+      .select("hours_added")
+      .eq("project_id", projectId),
   ]);
 
   if (!project) {
@@ -270,8 +282,30 @@ export default async function WorkerProjectDetailPage({
 
   const running = runningFromDb as TimeEntryRow | null;
   const usedHours = totalUsedHours(workerEntries);
+  const projectUsedHours = completedLoggedHours((projectTimeEntries ?? []) as ProjectTimeHoursRow[]);
   const assignedHours = assignedHoursFromQuoteEstimateOrSubtasks(linkedQuote, quoteSubtasks);
-  const outstandingDebt = Number(billingSummary?.outstanding_debt_hours ?? 0);
+  const remainingHours = Math.max(0, assignedHours - projectUsedHours);
+  const outstandingDebt = outstandingDebtFromBilledHours(projectUsedHours, sumPurchasedHours((purchases ?? []) as PurchaseHoursRow[]));
+  const projectMeta: ProjectDetailMetaItem[] = [
+    { label: t(locale, "Customer", "Cliente"), value: customerDisplayName || t(locale, "Unknown", "Sconosciuto") },
+    { label: t(locale, "Assigned hours", "Ore assegnate"), value: hoursToMinutesWithHoursDisplay(assignedHours), tone: "accent" },
+    { label: t(locale, "My logged hours", "Le mie ore registrate"), value: hoursToMinutesWithHoursDisplay(usedHours) },
+    {
+      label: t(locale, "Remaining hours", "Ore rimanenti"),
+      value: hoursToMinutesWithHoursDisplay(remainingHours),
+      tone: remainingHours > 0 ? "success" : "danger",
+    },
+  ];
+
+  if (project.billing_mode === "postpaid") {
+    projectMeta.push({
+      label: t(locale, "Project debt", "Debito progetto"),
+      value: hoursToMinutesWithHoursDisplay(outstandingDebt),
+      tone: outstandingDebt > 0 ? "danger" : "success",
+    });
+  } else {
+    projectMeta.push({ label: t(locale, "Discussion messages", "Messaggi discussione"), value: String(messages.length) });
+  }
 
   return (
     <ProjectDetailShell
@@ -284,21 +318,7 @@ export default async function WorkerProjectDetailPage({
       badgeLabel={project.billing_mode === "postpaid" ? t(locale, "Post-paid", "Post-pagato") : t(locale, "Prepaid", "Prepagato")}
       badgeTone={project.billing_mode === "postpaid" ? "warning" : "info"}
       headerAction={<Link href={`/worker?projectId=${project.id}`} className={quotesSecondaryButtonClass}>{t(locale, "Filter dashboard to this project", "Filtra dashboard su questo progetto")}</Link>}
-      meta={[
-        { label: t(locale, "Customer", "Cliente"), value: customerDisplayName || t(locale, "Unknown", "Sconosciuto") },
-        { label: t(locale, "Assigned hours", "Ore assegnate"), value: hoursToMinutesWithHoursDisplay(assignedHours), tone: "accent" },
-        { label: t(locale, "My logged hours", "Le mie ore registrate"), value: hoursToMinutesWithHoursDisplay(usedHours) },
-        project.billing_mode === "postpaid"
-          ? {
-              label: t(locale, "Project debt", "Debito progetto"),
-              value: hoursToMinutesWithHoursDisplay(outstandingDebt),
-              tone: outstandingDebt > 0 ? "danger" : "success",
-            }
-          : {
-              label: t(locale, "Discussion messages", "Messaggi discussione"),
-              value: String(messages.length),
-            },
-      ]}
+      meta={projectMeta}
       overview={(
         <div className="space-y-4">
           {linkedQuote ? (
