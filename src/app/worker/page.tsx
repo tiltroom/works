@@ -5,6 +5,8 @@ import { ModalActionForm } from "@/components/ui/modal-action-form";
 import { LogoutButton } from "@/components/logout-button";
 import Link from "next/link";
 import { TimerCard } from "@/components/worker/timer-card";
+import { LoggedActivityList } from "@/components/worker/logged-activity-list";
+import { LoggedActivitySection } from "@/components/worker/logged-activity-section";
 import { ViewportModal, ViewportModalPanel } from "@/components/ui/viewport-modal";
 import { StopTimerButton } from "@/components/worker/stop-timer-button";
 import { requireRole } from "@/lib/auth";
@@ -29,6 +31,7 @@ interface TimeEntryRow {
   ended_at: string | null;
   description: string | null;
   source: "timer" | "manual";
+  quote_subtask_id: string | null;
   projects: {
     name: string;
   } | null;
@@ -86,7 +89,7 @@ export default async function WorkerPage({
 
   let timeEntriesQuery = supabase
     .from("time_entries")
-    .select("id,project_id,started_at,ended_at,description,source,projects(name)")
+    .select("id,project_id,started_at,ended_at,description,source,quote_subtask_id,projects(name)")
     .eq("worker_id", profile.id)
     .order("started_at", { ascending: false });
 
@@ -116,7 +119,7 @@ export default async function WorkerPage({
     timeEntriesQuery.limit(20),
     supabase
       .from("time_entries")
-      .select("id,project_id,started_at,ended_at,description,source,projects(name)")
+      .select("id,project_id,started_at,ended_at,description,source,quote_subtask_id,projects(name)")
       .eq("worker_id", profile.id)
       .is("ended_at", null)
       .order("started_at", { ascending: false })
@@ -125,7 +128,7 @@ export default async function WorkerPage({
       editTimeEntryIdParam
       ? supabase
           .from("time_entries")
-          .select("id,project_id,started_at,ended_at,description,source,projects(name)")
+          .select("id,project_id,started_at,ended_at,description,source,quote_subtask_id,projects(name)")
           .eq("worker_id", profile.id)
           .eq("id", editTimeEntryIdParam)
           .maybeSingle<TimeEntryRow>()
@@ -133,7 +136,7 @@ export default async function WorkerPage({
       deleteTimeEntryIdParam
       ? supabase
           .from("time_entries")
-          .select("id,project_id,started_at,ended_at,description,source,projects(name)")
+          .select("id,project_id,started_at,ended_at,description,source,quote_subtask_id,projects(name)")
           .eq("worker_id", profile.id)
           .eq("id", deleteTimeEntryIdParam)
           .maybeSingle<TimeEntryRow>()
@@ -162,8 +165,10 @@ export default async function WorkerPage({
     : { data: [] };
   const quoteProjectIdByQuoteId = new Map(linkedQuotes.map((quote) => [quote.id, quote.linked_project_id]));
   const subtaskOptionsByProjectId = new Map<string, QuoteSubtaskRow[]>();
+  const subtaskTitleById = new Map<string, string>();
 
   for (const subtask of (quoteSubtasksForProjects ?? []) as QuoteSubtaskRow[]) {
+    subtaskTitleById.set(subtask.id, subtask.title);
     const subtaskProjectId = quoteProjectIdByQuoteId.get(subtask.quote_id);
     if (!subtaskProjectId) {
       continue;
@@ -516,6 +521,41 @@ export default async function WorkerPage({
                   </tbody>
                 </table>
               </div>
+            </div>
+
+            <div className="mt-4">
+              <LoggedActivitySection
+                title={t(locale, "Logged activity", "Attività registrata")}
+                description={t(locale, "Compressed activity rows open on click for full timestamps and notes.", "Le righe attività compatte si aprono al clic per timestamp completi e note.")}
+                showLabel={t(locale, "Show activity", "Mostra attività")}
+                hideLabel={t(locale, "Hide activity", "Nascondi attività")}
+                countLabel={`${entries.length} ${t(locale, entries.length === 1 ? "entry" : "entries", entries.length === 1 ? "voce" : "voci")}`}
+              >
+                <LoggedActivityList
+                  entries={entries.map((entry) => ({
+                    id: entry.id,
+                    startedAt: entry.started_at,
+                    endedAt: entry.ended_at,
+                    description: entry.description,
+                    source: entry.source,
+                    contextLabel: entry.quote_subtask_id
+                      ? subtaskTitleById.get(entry.quote_subtask_id) ?? entry.projects?.name ?? null
+                      : entry.projects?.name ?? null,
+                  }))}
+                  tag={tag}
+                  labels={{
+                    emptyMessage: t(locale, "No logged activity to show yet.", "Nessuna attività registrata da mostrare."),
+                    running: t(locale, "Running", "In corso"),
+                    timer: t(locale, "Timer", "Timer"),
+                    manual: t(locale, "Manual", "Manuale"),
+                    started: t(locale, "Started", "Inizio"),
+                    ended: t(locale, "Ended", "Fine"),
+                    duration: t(locale, "Duration", "Durata"),
+                    description: t(locale, "Description", "Descrizione"),
+                    noDescription: t(locale, "No description provided.", "Nessuna descrizione fornita."),
+                  }}
+                />
+              </LoggedActivitySection>
             </div>
           </section>
         </div>
