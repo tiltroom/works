@@ -303,11 +303,12 @@ export default async function WorkerProjectDetailPage({
         <div className="space-y-4">
           {linkedQuote ? (
             <QuotesSectionCard
+              className="min-w-0 overflow-hidden"
               title={t(locale, "Subtasks", "Sottoattività")}
               description={t(locale, "Work directly from the quote breakdown: start a focused timer or log past work against each activity.", "Lavora direttamente dalla suddivisione del preventivo: avvia un timer mirato o registra lavoro passato su ogni attività.")}
               action={<Link href={`/worker/quotes/${linkedQuote.id}`} className={quotesSecondaryButtonClass}>{t(locale, "Open source quote", "Apri preventivo sorgente")}</Link>}
             >
-              <div className="space-y-4">
+              <div className="min-w-0 space-y-4">
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="rounded-xl border border-border/70 bg-background/55 px-3 py-2">
                     <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{t(locale, "Quote", "Preventivo")}</p>
@@ -328,7 +329,7 @@ export default async function WorkerProjectDetailPage({
                     {t(locale, "No quote subtasks are linked to this project yet.", "Nessuna sottoattività del preventivo è collegata a questo progetto.")}
                   </p>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="min-w-0 space-y-3">
                     {quoteSubtasks.map((subtask) => {
                       const subtaskEntries = quoteTimeEntriesBySubtask.get(subtask.id) ?? [];
                       const loggedHours = completedLoggedHours(subtaskEntries);
@@ -338,25 +339,25 @@ export default async function WorkerProjectDetailPage({
                       const progress = progressPercent(loggedHours, estimatedHours);
 
                       return (
-                        <article key={subtask.id} className="overflow-hidden rounded-xl border border-border/70 bg-background/55">
-                          <div className="space-y-2 px-3 py-3">
-                            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <article key={subtask.id} className="min-w-0 overflow-hidden rounded-xl border border-border/70 bg-background/55">
+                          <div className="min-w-0 space-y-3 px-3 py-3 sm:px-4">
+                            <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
                               <div className="min-w-0 flex-1">
-                                <h3 className="text-sm font-semibold text-foreground">{subtask.title}</h3>
-                                {subtask.description ? <p className="mt-1 line-clamp-1 text-xs leading-5 text-muted-foreground">{subtask.description}</p> : null}
+                                <h3 className="break-words text-sm font-semibold text-foreground">{subtask.title}</h3>
+                                {subtask.description ? <p className="mt-1 line-clamp-2 break-words text-xs leading-5 text-muted-foreground sm:line-clamp-1">{subtask.description}</p> : null}
                               </div>
-                              <div className="grid min-w-52 grid-cols-3 gap-2 text-right">
-                                <div>
+                              <div className="grid min-w-0 grid-cols-1 gap-2 text-left min-[420px]:grid-cols-3 lg:w-64 lg:shrink-0 lg:text-right">
+                                <div className="rounded-lg border border-border/60 bg-card/35 px-2.5 py-2 min-[420px]:border-0 min-[420px]:bg-transparent min-[420px]:p-0">
                                   <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{t(locale, "Est.", "Stima")}</p>
-                                  <p className="mt-1 text-xs font-semibold text-foreground">{formatCompactHours(estimatedHours)}</p>
+                                  <p className="mt-1 truncate text-xs font-semibold text-foreground" title={formatCompactHours(estimatedHours)}>{formatCompactHours(estimatedHours)}</p>
                                 </div>
-                                <div>
+                                <div className="rounded-lg border border-border/60 bg-card/35 px-2.5 py-2 min-[420px]:border-0 min-[420px]:bg-transparent min-[420px]:p-0">
                                   <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{t(locale, "Logged", "Registrato")}</p>
-                                  <p className={`mt-1 text-xs font-semibold ${isOverEstimate ? "text-amber-700 dark:text-amber-300" : "text-foreground"}`}>{formatCompactHours(loggedHours)}</p>
+                                  <p className={`mt-1 truncate text-xs font-semibold ${isOverEstimate ? "text-amber-700 dark:text-amber-300" : "text-foreground"}`} title={formatCompactHours(loggedHours)}>{formatCompactHours(loggedHours)}</p>
                                 </div>
-                                <div>
+                                <div className="rounded-lg border border-border/60 bg-card/35 px-2.5 py-2 min-[420px]:border-0 min-[420px]:bg-transparent min-[420px]:p-0">
                                   <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{isOverEstimate ? t(locale, "Over", "Extra") : t(locale, "Left", "Resta")}</p>
-                                  <p className={`mt-1 text-xs font-semibold ${isOverEstimate ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground"}`}>{formatCompactHours(isOverEstimate ? loggedHours - estimatedHours : remainingHours)}</p>
+                                  <p className={`mt-1 truncate text-xs font-semibold ${isOverEstimate ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground"}`} title={formatCompactHours(isOverEstimate ? loggedHours - estimatedHours : remainingHours)}>{formatCompactHours(isOverEstimate ? loggedHours - estimatedHours : remainingHours)}</p>
                                 </div>
                               </div>
                             </div>
