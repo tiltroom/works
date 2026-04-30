@@ -14,9 +14,12 @@ interface OpenTimeEntryRow {
   started_at: string;
 }
 
-interface RunningTimeEntryRow extends OpenTimeEntryRow {
+interface RunningTimeEntryBaseRow extends OpenTimeEntryRow {
   project_id: string;
   description: string | null;
+}
+
+interface RunningTimeEntryRow extends RunningTimeEntryBaseRow {
   quote_subtask_id: string | null;
 }
 
@@ -56,8 +59,51 @@ interface ProjectAssignmentRow {
   project_id: string;
 }
 
+interface TimeEntryInsertPayload {
+  project_id: string;
+  worker_id: string;
+  started_at: string;
+  ended_at: string | null;
+  description: string | null;
+  source: "timer" | "manual";
+  quote_subtask_id?: string;
+}
+
 function parseBooleanField(value: FormDataEntryValue | null) {
   return value === "1" || value === "true" || value === "on" || value === "yes";
+}
+
+function isMissingQuoteSubtaskIdColumnError(error: { code?: string | null; message?: string | null } | null | undefined) {
+  const message = `${error?.message ?? ""}`.toLowerCase();
+
+  return message.includes("quote_subtask_id") && (
+    error?.code === "PGRST204"
+    || error?.code === "42703"
+    || message.includes("schema cache")
+    || message.includes("column")
+  );
+}
+
+function createMissingQuoteSubtaskIdColumnError(locale: "en" | "it") {
+  return new Error(t(
+    locale,
+    "Quote-subtask time tracking needs a database update. Apply the latest Supabase migrations and reload the schema cache, then try again.",
+    "Il tracciamento tempo per sottoattività del preventivo richiede un aggiornamento del database. Applica le ultime migrazioni Supabase e ricarica la cache dello schema, poi riprova.",
+  ));
+}
+
+function buildTimeEntryInsertPayload(
+  payload: Omit<TimeEntryInsertPayload, "quote_subtask_id">,
+  quoteSubtaskId: string | null | undefined,
+): TimeEntryInsertPayload {
+  if (!quoteSubtaskId) {
+    return payload;
+  }
+
+  return {
+    ...payload,
+    quote_subtask_id: quoteSubtaskId,
+  };
 }
 
 function parseNumericHours(value: number | string | null | undefined) {
@@ -284,19 +330,21 @@ export async function startTimerAction(formData: FormData) {
     throw new Error(t(locale, "You already have a running timer", "Hai già un timer in esecuzione"));
   }
 
-  const { error } = await supabase.from("time_entries").insert({
+  const { error } = await supabase.from("time_entries").insert(buildTimeEntryInsertPayload({
     project_id: projectId,
     worker_id: profile.id,
     started_at: new Date().toISOString(),
     ended_at: null,
     description: quoteSubtask ? buildSubtaskTimeEntryDescription(quoteSubtask.title, description) : description || null,
     source: "timer",
-    quote_subtask_id: quoteSubtask?.id ?? null,
-  });
+  }, quoteSubtask?.id));
 
   if (error) {
     if (error.message.includes("idx_time_entries_single_open_timer")) {
       throw new Error(t(locale, "A timer is already running", "Un timer è già in esecuzione"));
+    }
+    if (quoteSubtask && isMissingQuoteSubtaskIdColumnError(error)) {
+      throw createMissingQuoteSubtaskIdColumnError(locale);
     }
     throw new Error(error.message);
   }
@@ -316,7 +364,7 @@ export async function stopTimerAction(formData: FormData) {
   }
 
   const supabase = await createClient();
-  const { data: runningEntry, error: runningEntryError } = await supabase
+  const runningEntryResult = await supabase
     .from("time_entries")
     .select("id,project_id,started_at,description,quote_subtask_id")
     .eq("id", timeEntryId)
@@ -324,8 +372,30 @@ export async function stopTimerAction(formData: FormData) {
     .is("ended_at", null)
     .maybeSingle<RunningTimeEntryRow>();
 
-  if (runningEntryError) {
-    throw new Error(runningEntryError.message);
+  let runningEntry: RunningTimeEntryRow | null = null;
+
+  if (runningEntryResult.error) {
+    if (!isMissingQuoteSubtaskIdColumnError(runningEntryResult.error)) {
+      throw new Error(runningEntryResult.error.message);
+    }
+
+    const fallbackResult = await supabase
+      .from("time_entries")
+      .select("id,project_id,started_at,description")
+      .eq("id", timeEntryId)
+      .eq("worker_id", profile.id)
+      .is("ended_at", null)
+      .maybeSingle<RunningTimeEntryBaseRow>();
+
+    if (fallbackResult.error) {
+      throw new Error(fallbackResult.error.message);
+    }
+
+    runningEntry = fallbackResult.data
+      ? { ...fallbackResult.data, quote_subtask_id: null }
+      : null;
+  } else {
+    runningEntry = runningEntryResult.data;
   }
 
   if (!runningEntry) {
@@ -472,19 +542,21 @@ export async function createManualTimeEntryAction(formData: FormData) {
     );
   }
 
-  const { error } = await supabase.from("time_entries").insert({
+  const { error } = await supabase.from("time_entries").insert(buildTimeEntryInsertPayload({
     project_id: projectId,
     worker_id: profile.id,
     started_at: startDate.toISOString(),
     ended_at: endDate.toISOString(),
     description: quoteSubtask ? buildSubtaskTimeEntryDescription(quoteSubtask.title, description) : description || null,
     source: "manual",
-    quote_subtask_id: quoteSubtask?.id ?? null,
-  });
+  }, quoteSubtask?.id));
 
   if (error) {
     if (error.message.includes("time_entry_overlap")) {
       throw new Error(t(locale, "This manual entry overlaps with another existing entry", "Questa voce manuale si sovrappone a un'altra voce esistente"));
+    }
+    if (quoteSubtask && isMissingQuoteSubtaskIdColumnError(error)) {
+      throw createMissingQuoteSubtaskIdColumnError(locale);
     }
     throw new Error(error.message);
   }

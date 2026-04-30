@@ -144,6 +144,25 @@ describe("quote conversion billing mode branching", () => {
     expect(migrationSql).toContain("quote_subtask_id = excluded.quote_subtask_id");
   });
 
+  it("repairs missing time entry quote subtask links and reloads the PostgREST schema cache", () => {
+    const migrationSql = readFileSync(
+      join(process.cwd(), "supabase", "2026-04-29-ensure-time-entry-quote-subtask-link.sql"),
+      "utf8",
+    );
+
+    expect(migrationSql).toContain("add column if not exists quote_subtask_id uuid");
+    expect(migrationSql).toContain("time_entries_quote_subtask_id_fkey");
+    expect(migrationSql).toContain("idx_time_entries_quote_subtask_id");
+    expect(migrationSql).toContain("drop constraint if exists project_debt_ledger_source_unique");
+    expect(migrationSql).toContain("old.ended_at is not distinct from new.ended_at");
+    expect(migrationSql).not.toContain("Re-accrual for edited time entry");
+    expect(migrationSql.indexOf("create or replace function public.accrue_time_entry_debt"))
+      .toBeLessThan(migrationSql.indexOf("update public.time_entries te"));
+    expect(migrationSql).toMatch(/update public\.time_entries te[\s\S]*set quote_subtask_id = qse\.quote_subtask_id/);
+    expect(migrationSql).toContain("create or replace function public.sync_time_entry_quote_subtask_id");
+    expect(migrationSql.toLowerCase()).toContain("notify pgrst, 'reload schema'");
+  });
+
   it("keeps the direct quote subtask link in a dated migration instead of the bootstrap schema", () => {
     const schemaSql = readFileSync(
       join(process.cwd(), "supabase", "schema.sql"),
