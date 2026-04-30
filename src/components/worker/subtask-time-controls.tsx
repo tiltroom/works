@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { ViewportModal, ViewportModalPanel } from "@/components/ui/viewport-modal";
 import { formatEstimateWarningHours, parseOverEstimateWarningMessage, type OverEstimateWarningPayload } from "@/lib/time-entry-warnings";
 import { timerStartedAtToNowHours } from "@/lib/time";
+import { datetimeLocalValueToUtcIso, utcIsoToDatetimeLocalValue } from "@/lib/date-time";
 
 interface SubtaskTimeControlsLabels {
   startTimer: string;
@@ -53,16 +54,12 @@ function getErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
-function formatForDatetimeLocal(value: Date) {
-  const offset = value.getTimezoneOffset() * 60000;
-  const local = new Date(value.getTime() - offset);
-  return local.toISOString().slice(0, 16);
-}
-
 function buildManualFormData(form: HTMLFormElement, projectId: string, quoteSubtaskId: string, confirmed: boolean) {
   const formData = new FormData(form);
   formData.set("projectId", projectId);
   formData.set("quoteSubtaskId", quoteSubtaskId);
+  formData.set("startedAtUtc", datetimeLocalValueToUtcIso(formData.get("startedAtLocal"), "Start time"));
+  formData.set("endedAtUtc", datetimeLocalValueToUtcIso(formData.get("endedAtLocal"), "End time"));
   if (confirmed) {
     formData.set("confirmOverEstimate", "true");
   } else {
@@ -149,7 +146,7 @@ export function SubtaskTimeControls({
     return () => window.clearInterval(interval);
   }, [isRunningThisSubtask, runningTimer]);
 
-  const defaultEndTime = useMemo(() => formatForDatetimeLocal(new Date()), []);
+  const defaultEndTime = useMemo(() => utcIsoToDatetimeLocalValue(new Date()), []);
 
   const runAction = async (kind: Exclude<PendingAction, null>, action: () => Promise<void>) => {
     setPendingAction(kind);
@@ -306,11 +303,11 @@ export function SubtaskTimeControls({
         <input type="hidden" name="quoteSubtaskId" value={quoteSubtaskId} />
         <div className="space-y-1.5">
           <label htmlFor={`manual-start-${quoteSubtaskId}`} className="text-xs font-medium text-muted-foreground">{labels.startTime}</label>
-          <input id={`manual-start-${quoteSubtaskId}`} name="startedAt" type="datetime-local" required className="w-full rounded-lg border border-input bg-background/75 px-3 py-2 text-xs text-foreground transition-all focus:border-transparent focus:outline-none focus:ring-2 focus:ring-amber-500" />
+          <input id={`manual-start-${quoteSubtaskId}`} name="startedAtLocal" type="datetime-local" required className="w-full rounded-lg border border-input bg-background/75 px-3 py-2 text-xs text-foreground transition-all focus:border-transparent focus:outline-none focus:ring-2 focus:ring-amber-500" />
         </div>
         <div className="space-y-1.5">
           <label htmlFor={`manual-end-${quoteSubtaskId}`} className="text-xs font-medium text-muted-foreground">{labels.endTime}</label>
-          <input id={`manual-end-${quoteSubtaskId}`} name="endedAt" type="datetime-local" required defaultValue={defaultEndTime} className="w-full rounded-lg border border-input bg-background/75 px-3 py-2 text-xs text-foreground transition-all focus:border-transparent focus:outline-none focus:ring-2 focus:ring-amber-500" />
+          <input id={`manual-end-${quoteSubtaskId}`} name="endedAtLocal" type="datetime-local" required defaultValue={defaultEndTime} className="w-full rounded-lg border border-input bg-background/75 px-3 py-2 text-xs text-foreground transition-all focus:border-transparent focus:outline-none focus:ring-2 focus:ring-amber-500" />
         </div>
         <div className="space-y-1.5 md:col-span-2">
           <label htmlFor={`manual-note-${quoteSubtaskId}`} className="text-xs font-medium text-muted-foreground">{labels.note}</label>
