@@ -233,7 +233,7 @@ describe("resolveRecipients", () => {
     const recipients = await resolveRecipients("quote-1", true, false, false);
 
     expect(recipients).toEqual([
-      { userId: "admin-1", role: "admin", email: "admin@example.com", locale: "en" },
+      { userId: "admin-1", role: "admin", email: "admin@example.com", locale: "it" },
     ]);
   });
 
@@ -242,7 +242,7 @@ describe("resolveRecipients", () => {
     const recipients = await resolveRecipients("quote-1", false, false, true);
 
     expect(recipients).toEqual([
-      { userId: "worker-1", role: "worker", email: "worker@example.com", locale: "en" },
+      { userId: "worker-1", role: "worker", email: "worker@example.com", locale: "it" },
     ]);
   });
 
@@ -297,9 +297,9 @@ describe("quote notification dispatch", () => {
       quoteId: "quote-1",
       recipientUserId: "admin-1",
       to: "admin@example.com",
-      locale: "en",
+      locale: "it",
     });
-    expect(body.subject).toContain("New Quote");
+    expect(body.subject).toContain("Nuovo Preventivo");
   });
 
   it("notifyQuoteConverted posts payloads for admin, customer, and worker", async () => {
@@ -311,9 +311,11 @@ describe("quote notification dispatch", () => {
     expect(bodies).toHaveLength(3);
     expect(bodies.map((body) => body.eventType)).toEqual(["quote_converted", "quote_converted", "quote_converted"]);
     expect(bodies.map((body) => body.recipientUserId).sort()).toEqual(["admin-1", "customer-1", "worker-1"]);
+    expect(bodies.every((body) => body.locale === "it")).toBe(true);
+    expect(bodies.every((body) => body.subject === "Preventivo Convertito: Test Quote")).toBe(true);
   });
 
-  it("notifyQuoteConverted uses the actor locale for the actor recipient", async () => {
+  it("notifyQuoteConverted forces Italian for the actor recipient", async () => {
     mocks.profiles = [
       { id: "customer-1", role: "customer", locale: "en", full_name: "Customer One" },
     ];
@@ -324,8 +326,8 @@ describe("quote notification dispatch", () => {
 
     await notifyQuoteConverted("quote-1", {
       actorUserId: "customer-1",
-      actorLocale: "it",
-      dedupeKey: "quote-converted:it",
+      actorLocale: "en",
+      dedupeKey: "quote-converted:forced-it",
     });
 
     const bodies = mocks.fetch.mock.calls.map(([, options]) => JSON.parse(options.body as string));
@@ -347,13 +349,13 @@ describe("quote notification dispatch", () => {
     expect(bodies).toHaveLength(3);
     expect(bodies.every((body) => body.eventType === "quote_reverted")).toBe(true);
     expect(bodies.map((body) => body.subject)).toEqual([
-      "Quote reverted to draft: Test Quote",
       "Preventivo riportato in bozza: Test Quote",
-      "Quote reverted to draft: Test Quote",
+      "Preventivo riportato in bozza: Test Quote",
+      "Preventivo riportato in bozza: Test Quote",
     ]);
   });
 
-  it("notifyQuoteReverted uses the actor locale for the actor recipient", async () => {
+  it("notifyQuoteReverted forces Italian for the actor recipient", async () => {
     mocks.profiles = [
       { id: "admin-1", role: "admin", locale: "en", full_name: "Admin One" },
     ];
@@ -364,8 +366,8 @@ describe("quote notification dispatch", () => {
 
     await notifyQuoteReverted("quote-1", {
       actorUserId: "admin-1",
-      actorLocale: "it",
-      dedupeKey: "quote-reverted:it",
+      actorLocale: "en",
+      dedupeKey: "quote-reverted:forced-it",
     });
 
     const bodies = mocks.fetch.mock.calls.map(([, options]) => JSON.parse(options.body as string));
@@ -393,11 +395,12 @@ describe("quote notification dispatch", () => {
     expect(bodies.map((body) => body.eventType)).toEqual(["quote_discussion_message", "quote_discussion_message", "quote_discussion_message"]);
     expect(bodies.map((body) => body.recipientUserId).sort()).toEqual(["admin-1", "customer-1", "worker-1"]);
     expect(bodies.every((body) => body.quoteId === "quote-1")).toBe(true);
-    expect(bodies.every((body) => body.subject.includes("discussion") || body.subject.includes("discussione"))).toBe(true);
+    expect(bodies.every((body) => body.locale === "it")).toBe(true);
+    expect(bodies.every((body) => body.subject === "Nuovo messaggio nella discussione: Test Quote")).toBe(true);
     expect(bodies[0]!.html).toContain("Hello related quote users");
   });
 
-  it("notifyQuoteDiscussionMessage uses the actor locale for the actor recipient", async () => {
+  it("notifyQuoteDiscussionMessage forces Italian for the actor recipient", async () => {
     mocks.profiles = [
       { id: "admin-1", role: "admin", locale: "en", full_name: "Admin One" },
     ];
@@ -409,10 +412,10 @@ describe("quote notification dispatch", () => {
     await notifyQuoteDiscussionMessage({
       quoteId: "quote-1",
       actorUserId: "admin-1",
-      actorLocale: "it",
+      actorLocale: "en",
       authorName: "Admin One",
       messageHtml: "<p>Ciao</p>",
-      dedupeKey: "quote-discussion:comment-it",
+      dedupeKey: "quote-discussion:comment-forced-it",
     });
 
     const bodies = mocks.fetch.mock.calls.map(([, options]) => JSON.parse(options.body as string));
@@ -441,10 +444,12 @@ describe("quote notification dispatch", () => {
     expect(bodies.map((body) => body.recipientUserId).sort()).toEqual(["admin-1", "customer-1", "worker-1"]);
     expect(bodies.every((body) => body.projectId === "project-1")).toBe(true);
     expect(bodies.every((body) => body.quoteId === undefined)).toBe(true);
+    expect(bodies.every((body) => body.locale === "it")).toBe(true);
+    expect(bodies.every((body) => body.subject === "Nuovo messaggio nel progetto: Test Project")).toBe(true);
     expect(bodies[0]!.html).toContain("Project discussion update");
   });
 
-  it("notifyProjectDiscussionMessage uses the actor locale for the actor recipient", async () => {
+  it("notifyProjectDiscussionMessage forces Italian for the actor recipient", async () => {
     mocks.profiles = [
       { id: "customer-1", role: "customer", locale: "en", full_name: "Customer One" },
     ];
@@ -456,10 +461,10 @@ describe("quote notification dispatch", () => {
     await notifyProjectDiscussionMessage({
       projectId: "project-1",
       actorUserId: "customer-1",
-      actorLocale: "it",
+      actorLocale: "en",
       authorName: "Customer One",
       messageHtml: "<p>Aggiornamento</p>",
-      dedupeKey: "project-discussion:message-it",
+      dedupeKey: "project-discussion:message-forced-it",
     });
 
     const bodies = mocks.fetch.mock.calls.map(([, options]) => JSON.parse(options.body as string));

@@ -14,6 +14,8 @@ type NotificationRole = AppRole;
 
 type NotificationLocale = "en" | "it";
 
+const EMAIL_NOTIFICATION_LOCALE: NotificationLocale = "it";
+
 interface QuoteNotificationContext {
   quoteId: string;
   quoteTitle: string;
@@ -82,7 +84,10 @@ interface QuoteEventNotificationOptions {
 const PENDING_NOTIFICATION_RETRY_AFTER_MS = 5 * 60 * 1000;
 
 function normalizeLocale(locale: string | null | undefined): NotificationLocale {
-  return locale === "it" ? "it" : "en";
+  void locale;
+  // Email notifications are intentionally Italian-only, regardless of a
+  // recipient profile locale, browser cookie, or actor locale passed in.
+  return EMAIL_NOTIFICATION_LOCALE;
 }
 
 function resolveActorRecipientLocale(
